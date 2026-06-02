@@ -7,6 +7,7 @@ export interface PersonLite {
   title: string | null;
   company: string | null;
   socials: Record<string, string>;
+  note?: string | null;
 }
 
 export interface Recommendation extends PersonLite {
@@ -77,16 +78,35 @@ export async function getAfterpartyByToken(token: string): Promise<AfterpartyDat
   );
   const markedIds = (conns ?? []).filter((c) => c.kind === "marked").map((c) => c.target_attendee_id);
 
+  // best note per target (confirmed > marked > recommended). Fetched separately
+  // and error-tolerantly so the page works even before the `note` migration.
+  const KIND_RANK: Record<string, number> = { confirmed: 3, marked: 2, recommended: 1 };
+  const noteByTarget = new Map<string, string>();
+  const { data: noteRows, error: noteErr } = await supabase
+    .from("connections")
+    .select("target_attendee_id, kind, note")
+    .eq("source_attendee_id", me.id);
+  if (!noteErr && noteRows) {
+    for (const c of [...noteRows].sort((a, b) => (KIND_RANK[a.kind] ?? 0) - (KIND_RANK[b.kind] ?? 0))) {
+      if (c.note) noteByTarget.set(c.target_attendee_id, c.note as string);
+    }
+  }
+
   const recommendations: Recommendation[] = (conns ?? [])
     .filter((c) => c.kind === "recommended" && rosterById.has(c.target_attendee_id))
     .map((c) => {
       const t = rosterById.get(c.target_attendee_id)!;
-      return { ...toLite(t), reason: c.reason, confirmed: confirmed.has(t.id) };
+      return {
+        ...toLite(t),
+        reason: c.reason,
+        confirmed: confirmed.has(t.id),
+        note: noteByTarget.get(t.id) ?? null,
+      };
     });
 
   const marked: PersonLite[] = markedIds
     .filter((id) => rosterById.has(id))
-    .map((id) => toLite(rosterById.get(id)!));
+    .map((id) => ({ ...toLite(rosterById.get(id)!), note: noteByTarget.get(id) ?? null }));
 
   // clusters this attendee belongs to
   const { data: clusterRows = [] } = await supabase

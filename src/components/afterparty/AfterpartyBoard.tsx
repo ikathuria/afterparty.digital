@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { setConnection } from "@/lib/connections";
+import { setConnection, saveNote } from "@/lib/connections";
 import { reachOutHref, reachOutLabel } from "@/lib/reach-out";
 import { buildIntro, buildVCards, downloadFile, type OutreachPerson } from "@/lib/outreach";
 import type { PersonLite, Recommendation } from "@/lib/page-data";
@@ -100,11 +100,21 @@ export function AfterpartyBoard({
     }
   }
 
+  function saveNoteFor(targetId: string, note: string) {
+    setRecs((rs) => rs.map((r) => (r.id === targetId ? { ...r, note } : r)));
+    setMarked((ms) => ms.map((m) => (m.id === targetId ? { ...m, note } : m)));
+    startTransition(async () => {
+      const res = await saveNote(token, targetId, note);
+      if (!res.ok) toast.error(res.error ?? "Couldn't save note");
+      else toast.success(note.trim() ? "Note saved" : "Note cleared");
+    });
+  }
+
   // unified lookup for the detail panel
   const personById = useMemo(() => {
     const m = new Map<
       string,
-      OutreachPerson & { id: string; kind: "rec" | "marked"; confirmed?: boolean }
+      OutreachPerson & { id: string; kind: "rec" | "marked"; confirmed?: boolean; note?: string | null }
     >();
     for (const r of recs)
       m.set(r.id, { ...r, kind: "rec", confirmed: r.confirmed });
@@ -299,6 +309,7 @@ export function AfterpartyBoard({
       {/* Detail panel */}
       {selected && (
         <DetailPanel
+          key={selected.id}
           person={selected}
           onClose={() => setSelectedId(null)}
           onCopyIntro={() => copyIntro(selected)}
@@ -308,6 +319,7 @@ export function AfterpartyBoard({
               : undefined
           }
           confirmed={selected.confirmed}
+          onSaveNote={(note) => saveNoteFor(selected.id, note)}
         />
       )}
     </div>
@@ -320,14 +332,18 @@ function DetailPanel({
   onCopyIntro,
   onToggleConfirm,
   confirmed,
+  onSaveNote,
 }: {
-  person: OutreachPerson & { id: string };
+  person: OutreachPerson & { id: string; note?: string | null };
   onClose: () => void;
   onCopyIntro: () => void;
   onToggleConfirm?: () => void;
   confirmed?: boolean;
+  onSaveNote: (note: string) => void;
 }) {
   const href = reachOutHref(person.socials);
+  const [note, setNote] = useState(person.note ?? "");
+  const dirty = note.trim() !== (person.note ?? "").trim();
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -372,6 +388,27 @@ function DetailPanel({
               {reachOutLabel(person.socials)} →
             </a>
           )}
+        </div>
+
+        {/* Private note */}
+        <div className="mt-6">
+          <label className="text-xs font-medium uppercase tracking-widest text-white/50">
+            Your note
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Why you want to follow up, where you met, what to mention…"
+            rows={3}
+            className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm outline-none placeholder:text-white/30 focus:border-fuchsia-400/50"
+          />
+          <button
+            onClick={() => onSaveNote(note)}
+            disabled={!dirty}
+            className="mt-2 w-full rounded-xl bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20 disabled:opacity-40"
+          >
+            Save note
+          </button>
         </div>
       </aside>
     </div>
