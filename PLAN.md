@@ -83,10 +83,10 @@ Tasks:
 **Goal:** Upload a CSV/JSON attendee list and get normalized attendee rows.
 
 Tasks:
-- [ ] CSV/JSON upload endpoint + parser (PapaParse) that maps arbitrary columns → {name,title,company,bio,interests,socials} — Done when: uploading a messy real-world CSV produces clean attendee rows
-- [ ] Claude normalization pass: infer `interests[]` from title/company/bio when missing — Done when: attendees with no explicit interests get sensible tags
-- [ ] Generate unique `page_token` per attendee on ingest — Done when: every attendee row has a tokenized URL
-- [ ] UI shows other upload types (Discord, photos, recordings) as **disabled "coming soon"** — Done when: visible in UI but only the list path is wired (honesty: don't fake parsing)
+- [x] CSV/JSON upload endpoint + parser (PapaParse) that maps arbitrary columns → {name,title,company,bio,interests,socials} — Done when: uploading a messy real-world CSV produces clean attendee rows *(parser in `src/lib/ingest/parse.ts` with synonym-based header mapping, first/last-name merge, BOM strip, social-handle→URL, email dedupe; 6 unit tests pass; server action `ingestAttendeeList` + `/upload` UI; verified end-to-end against live DB)*
+- [~] Claude normalization pass: infer `interests[]` from title/company/bio when missing — Done when: attendees with no explicit interests get sensible tags *(implemented in `src/lib/ingest/normalize.ts`, wired into ingest; **gracefully no-ops until `ANTHROPIC_API_KEY` is set** — output not yet verified with a live key)*
+- [x] Generate unique `page_token` per attendee on ingest — Done when: every attendee row has a tokenized URL *(`src/lib/tokens.ts`, 96-bit base64url; verified all-unique on 8-row insert)*
+- [x] UI shows other upload types (Discord, photos, recordings) as **disabled "coming soon"** — Done when: visible in UI but only the list path is wired *(4 disabled source tiles on `/upload`; no faked parsing)*
 
 ---
 
@@ -190,4 +190,5 @@ claude "Read PLAN.md. Without building anything new, test everything that's mark
 - **Wedge** — AI matchmaking is commoditized (Brella/Grip/Swapcard); the *afterparty / post-event* frame is the only defensible differentiator.
 - **Hero priority order**: Afterparty page (M4) > AI core (M3) > Demo data (M6) > Organizer dashboard (M5). If time runs out, the dashboard shrinks to a single static-looking screen.
 - **Cost control** — demo pages pre-generated; live pitch makes zero Claude calls.
+- **2026-06-01 (Milestone 2 done)** — Ingestion pipeline complete: robust CSV/JSON parser (`src/lib/ingest/`), unique page tokens (`src/lib/tokens.ts`), `ingestAttendeeList` server action (`src/lib/attendees.ts`), `/upload` UI with disabled "coming soon" source tiles. `npm run test` runs node:test parser suite (6 passing) via Node 24 type-stripping; added `allowImportingTsExtensions` to tsconfig for the explicit `.ts` test imports. Sample data at `samples/attendees-sample.csv`. **Only the Claude interest-inference step is unverified — needs `ANTHROPIC_API_KEY`** (no-ops gracefully until then).
 - **2026-06-01 (Milestone 1 done)** — Scaffolded with **Next.js 16.2.7** (the `latest` tag moved past 15), React 19, Tailwind v4, shadcn/ui (`base-nova` style). src-dir layout, so plan's `lib/*` live under `src/lib/*`. Stack additions installed: `@supabase/supabase-js`, `@supabase/ssr`, `@anthropic-ai/sdk`, `react-force-graph-2d`. **One manual step remains before Milestone 2:** create a Supabase project and apply `supabase/migrations/0001_init.sql`, then fill `.env.local`.
