@@ -93,12 +93,14 @@ Tasks:
 ### Milestone 3: AI Core — clustering + matchmaking *(Days 3–4) ⭐ THE PRODUCT*
 **Goal:** For an event's attendees, generate interest clusters and per-attendee "5 people you should meet + why."
 
+> **Design change (2026-06-01):** built **key-free and deterministic** instead of Claude-first (user is skipping the Anthropic key for now). Clustering + matchmaking run as pure functions — free, fast, reproducible (great for a zero-API-call live demo), and fully honest. Claude becomes an **optional enhancement** for richer reason prose once a key is added.
+
 Tasks:
-- [ ] Clustering: Claude groups all attendees into 4–8 labeled interest clusters — Done when: clusters cover ~all attendees with human-readable themes, persisted to `clusters`
-- [ ] Matchmaking: for each attendee, Claude picks top 5 recommended connections with a specific one-line `reason` each — Done when: rows written to `connections` as `kind='recommended'`, reasons reference real attributes (not generic)
-- [ ] Run generation as a Claude **Batch** job with **prompt caching** of the attendee roster — Done when: a 200-person event generates fully for well under $1
-- [ ] Guardrail prompt: never assert two people met; only recommend — Done when: spot-check of 10 reasons shows zero false "you talked to" claims
-- [ ] Idempotent re-run (clear + regenerate per event) — Done when: re-running doesn't duplicate connections
+- [x] Clustering: ~~Claude~~ **deterministic** grouping into ≤8 labeled interest clusters — Done when: clusters cover ~all attendees with human-readable themes, persisted to `clusters` *(`src/lib/ai/cluster.ts`; verified on sample → "AI" + "General Networking", every attendee covered once)*
+- [x] Matchmaking: for each attendee, top 5 recommended connections with a specific one-line `reason` each — Done when: rows written to `connections` as `kind='recommended'`, reasons reference real attributes *(`src/lib/ai/match.ts`; scores by shared interest tags / cluster / company; reasons cite shared tags + title/company)*
+- [~] ~~Claude **Batch** + caching~~ — **N/A for the keyless path** (cost is $0). Deferred: optional Claude pass to enrich reasons + catch semantic interest matches (e.g. "Devtools" ≈ "Developer Experience") once `ANTHROPIC_API_KEY` is set.
+- [x] Guardrail: never assert two people met; only recommend — Done when: spot-check shows zero false "you talked to" claims *(enforced by construction; unit test asserts no reason matches met/talked/spoke/connected)*
+- [x] Idempotent re-run (clear + regenerate per event) — Done when: re-running doesn't duplicate connections *(`generateForEvent` deletes prior clusters + `recommended` connections — preserving user `marked`/`confirmed` edges — before regenerating; verified reset → 0)*
 
 ---
 
@@ -190,5 +192,6 @@ claude "Read PLAN.md. Without building anything new, test everything that's mark
 - **Wedge** — AI matchmaking is commoditized (Brella/Grip/Swapcard); the *afterparty / post-event* frame is the only defensible differentiator.
 - **Hero priority order**: Afterparty page (M4) > AI core (M3) > Demo data (M6) > Organizer dashboard (M5). If time runs out, the dashboard shrinks to a single static-looking screen.
 - **Cost control** — demo pages pre-generated; live pitch makes zero Claude calls.
+- **2026-06-01 (Milestone 3 done, key-free)** — AI core built as **deterministic** clustering (`src/lib/ai/cluster.ts`) + matchmaking (`src/lib/ai/match.ts`), orchestrated by `generateForEvent` (`src/lib/generate.ts`), auto-run after ingest from `/upload`. No Anthropic key required → live demo makes **zero API calls**. 11 unit tests pass (incl. honesty-rule + determinism). Verified end-to-end on live DB. **Claude is now an optional enhancement** (richer reasons + semantic interest matching) gated on `ANTHROPIC_API_KEY`; the deterministic path is the default and always works.
 - **2026-06-01 (Milestone 2 done)** — Ingestion pipeline complete: robust CSV/JSON parser (`src/lib/ingest/`), unique page tokens (`src/lib/tokens.ts`), `ingestAttendeeList` server action (`src/lib/attendees.ts`), `/upload` UI with disabled "coming soon" source tiles. `npm run test` runs node:test parser suite (6 passing) via Node 24 type-stripping; added `allowImportingTsExtensions` to tsconfig for the explicit `.ts` test imports. Sample data at `samples/attendees-sample.csv`. **Only the Claude interest-inference step is unverified — needs `ANTHROPIC_API_KEY`** (no-ops gracefully until then).
 - **2026-06-01 (Milestone 1 done)** — Scaffolded with **Next.js 16.2.7** (the `latest` tag moved past 15), React 19, Tailwind v4, shadcn/ui (`base-nova` style). src-dir layout, so plan's `lib/*` live under `src/lib/*`. Stack additions installed: `@supabase/supabase-js`, `@supabase/ssr`, `@anthropic-ai/sdk`, `react-force-graph-2d`. **One manual step remains before Milestone 2:** create a Supabase project and apply `supabase/migrations/0001_init.sql`, then fill `.env.local`.

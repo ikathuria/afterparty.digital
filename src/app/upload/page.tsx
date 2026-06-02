@@ -85,7 +85,8 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p className="text-muted-foreground">
-              {result.withInterests} have interest tags. Sample pages:
+              {result.withInterests} have interest tags · {result.clusters ?? 0} clusters ·{" "}
+              {result.connections ?? 0} recommended connections. Sample pages:
             </p>
             <ul className="space-y-1">
               {result.sample?.map((s) => (

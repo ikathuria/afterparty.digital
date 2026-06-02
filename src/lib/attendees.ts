@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { parseAttendeeFile } from "@/lib/ingest/parse";
 import { inferMissingInterests } from "@/lib/ingest/normalize";
+import { generateForEvent } from "@/lib/generate";
 import { generatePageToken } from "@/lib/tokens";
 import type { AttendeeRow } from "@/lib/supabase/types";
 
@@ -22,6 +23,8 @@ export interface IngestResult {
   eventSlug?: string;
   count?: number;
   withInterests?: number;
+  clusters?: number;
+  connections?: number;
   sample?: { name: string; title: string | null; page_token: string }[];
 }
 
@@ -82,12 +85,17 @@ export async function ingestAttendeeList(formData: FormData): Promise<IngestResu
 
   const attendees = inserted as Pick<AttendeeRow, "name" | "title" | "page_token" | "interests">[];
 
+  // Run the (key-free, deterministic) afterparty generation: clusters + matches.
+  const gen = await generateForEvent(event.id);
+
   return {
     ok: true,
     eventId: event.id,
     eventSlug: event.slug,
     count: attendees.length,
     withInterests: attendees.filter((a) => a.interests.length > 0).length,
+    clusters: gen.ok ? gen.clusters : undefined,
+    connections: gen.ok ? gen.connections : undefined,
     sample: attendees.slice(0, 5).map((a) => ({
       name: a.name,
       title: a.title,
