@@ -73,7 +73,7 @@ RLS: an attendee page is readable only with a valid `page_token`. Organizer dash
 
 Tasks:
 - [x] Init Next.js 15 + Tailwind + shadcn/ui in repo root — Done when: `npm run dev` starts clean at localhost:3000 *(used Next.js **16** — `latest` has advanced; dev verified HTTP 200)*
-- [~] Create Supabase project, apply schema above via migration — Done when: all 5 tables exist, RLS enabled on attendees/connections *(migration **written** at `supabase/migrations/0001_init.sql` with RLS on all 5 tables; **applying it needs your Supabase project + credentials** — see `supabase/README.md`)*
+- [x] Create Supabase project, apply schema above via migration — Done when: all 5 tables exist, RLS enabled on attendees/connections *(project `nxhitfftluvjwoyvzkos` live; migration applied — verified all 5 tables reachable and RLS returns 0 rows to anon)*
 - [x] Add Supabase server + browser clients, commit `.env.example` — Done when: a server action can read/write `events` *(clients in `src/lib/supabase/`, `createEvent`/`getEventBySlug` in `src/lib/events.ts`, `.env.example` committed)*
 - [x] Folder structure: `app/`, `lib/ai/`, `lib/supabase/`, `lib/ingest/`, `components/` — Done when: dirs exist with index stubs *(under `src/` per shadcn import alias)*
 
