@@ -86,8 +86,17 @@ export default function UploadPage() {
           <CardContent className="space-y-3 text-sm">
             <p className="text-muted-foreground">
               {result.withInterests} have interest tags · {result.clusters ?? 0} clusters ·{" "}
-              {result.connections ?? 0} recommended connections. Sample pages:
+              {result.connections ?? 0} recommended connections.
             </p>
+            {result.eventId && (
+              <a
+                href={`${APP_URL}/dashboard/${result.eventId}`}
+                className="inline-block rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground"
+              >
+                Open organizer dashboard →
+              </a>
+            )}
+            <p className="text-muted-foreground">Sample attendee pages:</p>
             <ul className="space-y-1">
               {result.sample?.map((s) => (
                 <li key={s.page_token} className="flex flex-col">
