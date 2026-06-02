@@ -107,13 +107,15 @@ Tasks:
 ### Milestone 4: The Afterparty Page *(Days 5–6) ⭐ THE HERO*
 **Goal:** A gorgeous, tokenized, public personal page — the thing judges see themselves on.
 
+> **Aesthetic:** vibrant & celebratory (user pick) — fuchsia/indigo/amber gradient washes, glowing graph nodes, glassmorphic cards on a near-black base so the neon reads.
+
 Tasks:
-- [ ] Route `app/p/[token]/page.tsx` server-renders one attendee's afterparty — Done when: visiting a valid token shows that person; invalid/expired token shows a graceful "this afterparty has ended" state
-- [ ] Hero section: "Here was your room" — event name, attendee count, the attendee's clusters — Done when: renders real data, looks designed not default
-- [ ] **5 people you should meet** cards, each with name/title/company + AI `reason` + a "reach out" link (mailto/LinkedIn) — Done when: cards render real recommendations
-- [ ] **Editable connection graph** (react-force-graph): nodes = you + recommendations + marked; user can add/remove/confirm edges; persists to `connections` — Done when: edits survive reload
-- [ ] **30-day countdown** to `dissolves_at`, framed as privacy-by-design — Done when: live ticking timer, copy frames ephemerality as a feature
-- [ ] Mobile-responsive + share/open-graph image — Done when: looks great on a phone and link previews show the attendee's name
+- [x] Route `app/p/[token]/page.tsx` server-renders one attendee's afterparty — Done when: valid token shows that person; invalid/expired shows graceful state *(loader `src/lib/page-data.ts` returns `live`/`dissolved`/`not_found`; all three states render; verified HTTP 200 on real token + on bad token)*
+- [x] Hero section: "Here was your room" — event name, attendee count, clusters — Done when: renders real data, looks designed *(gradient hero, name greeting, attendee count, cluster chips; verified "here was your room" + clusters in output)*
+- [x] **5 people you should meet** cards with name/title/company + `reason` + "reach out" link — Done when: cards render real recommendations *(in `AfterpartyBoard`; reach-out picks LinkedIn>X>email>site; verified real reasons render)*
+- [x] **Editable connection graph** (react-force-graph): nodes = you + recommendations + marked; add/remove/confirm edges; persists — Done when: edits survive reload *(`RelationshipGraph` + token-auth `setConnection` action; tap to confirm, search-to-add marked; verified confirmed+marked persist across reload)*
+- [x] **30-day countdown** to `dissolves_at`, framed as privacy-by-design — Done when: live ticking timer, copy frames ephemerality as a feature *(`Countdown` component, "your data isn't kept a day longer than the memory")*
+- [x] Mobile-responsive + share/open-graph image — Done when: looks great on a phone and link previews show the attendee's name *(responsive grids/stack; dynamic `opengraph-image.tsx` via next/og → "{name}'s afterparty", verified 200 image/png)*
 
 ---
 
@@ -192,6 +194,7 @@ claude "Read PLAN.md. Without building anything new, test everything that's mark
 - **Wedge** — AI matchmaking is commoditized (Brella/Grip/Swapcard); the *afterparty / post-event* frame is the only defensible differentiator.
 - **Hero priority order**: Afterparty page (M4) > AI core (M3) > Demo data (M6) > Organizer dashboard (M5). If time runs out, the dashboard shrinks to a single static-looking screen.
 - **Cost control** — demo pages pre-generated; live pitch makes zero Claude calls.
+- **2026-06-01 (Milestone 4 done) ⭐ HERO** — Tokenized afterparty page at `/p/[token]` (vibrant/celebratory): gradient hero, cluster chips, live 30-day `Countdown`, interactive `AfterpartyBoard` (glowing react-force-graph + "5 people to meet" cards + search-to-add). Editing via token-auth `setConnection` action (`src/lib/connections.ts`); confirm/mark persist across reload (verified). Dynamic OG image. Graceful `not_found`/`dissolved` states. Loader: `src/lib/page-data.ts`. **A seeded demo event "DeveloperWeek 2026 (demo)" (slug `smoke-demo`, 8 attendees) is live in the DB** — Ada's page (`/p/7aWZSezXnbYSZh2-`) shows a confirmed + marked example. Re-seed logic should move into a committed script in Milestone 6.
 - **2026-06-01 (Milestone 3 done, key-free)** — AI core built as **deterministic** clustering (`src/lib/ai/cluster.ts`) + matchmaking (`src/lib/ai/match.ts`), orchestrated by `generateForEvent` (`src/lib/generate.ts`), auto-run after ingest from `/upload`. No Anthropic key required → live demo makes **zero API calls**. 11 unit tests pass (incl. honesty-rule + determinism). Verified end-to-end on live DB. **Claude is now an optional enhancement** (richer reasons + semantic interest matching) gated on `ANTHROPIC_API_KEY`; the deterministic path is the default and always works.
 - **2026-06-01 (Milestone 2 done)** — Ingestion pipeline complete: robust CSV/JSON parser (`src/lib/ingest/`), unique page tokens (`src/lib/tokens.ts`), `ingestAttendeeList` server action (`src/lib/attendees.ts`), `/upload` UI with disabled "coming soon" source tiles. `npm run test` runs node:test parser suite (6 passing) via Node 24 type-stripping; added `allowImportingTsExtensions` to tsconfig for the explicit `.ts` test imports. Sample data at `samples/attendees-sample.csv`. **Only the Claude interest-inference step is unverified — needs `ANTHROPIC_API_KEY`** (no-ops gracefully until then).
 - **2026-06-01 (Milestone 1 done)** — Scaffolded with **Next.js 16.2.7** (the `latest` tag moved past 15), React 19, Tailwind v4, shadcn/ui (`base-nova` style). src-dir layout, so plan's `lib/*` live under `src/lib/*`. Stack additions installed: `@supabase/supabase-js`, `@supabase/ssr`, `@anthropic-ai/sdk`, `react-force-graph-2d`. **One manual step remains before Milestone 2:** create a Supabase project and apply `supabase/migrations/0001_init.sql`, then fill `.env.local`.
