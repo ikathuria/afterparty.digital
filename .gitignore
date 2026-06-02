@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local dev logs
 dev.log
+
+# local-only demo data (real scraped participants — never commit)
+demo-data/

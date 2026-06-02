@@ -38,7 +38,7 @@ const SYNONYMS: Record<Field, string[]> = {
   name: ["name", "full name", "fullname", "attendee name", "display name", "your name"],
   first_name: ["first name", "firstname", "given name", "first"],
   last_name: ["last name", "lastname", "surname", "family name", "last"],
-  title: ["title", "job title", "jobtitle", "role", "position", "headline", "occupation"],
+  title: ["title", "job title", "jobtitle", "role", "position", "headline", "occupation", "specialty", "speciality"],
   company: ["company", "organization", "organisation", "employer", "org", "workplace", "company name"],
   bio: ["bio", "about", "description", "summary", "blurb", "intro", "introduction"],
   interests: ["interests", "tags", "topics", "interested in", "skills", "focus", "expertise", "looking for"],
