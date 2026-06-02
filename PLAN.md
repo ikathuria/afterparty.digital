@@ -134,10 +134,12 @@ Tasks:
 **Goal:** A real, pre-generated DeveloperWeek afterparty so the live demo makes zero API calls and never fails on stage.
 
 Tasks:
-- [ ] Assemble a real DeveloperWeek 2026 attendee/speaker list (public speaker roster / Devpost participants / any obtained list) into the CSV format — Done when: a real-names CSV exists in `/demo`
-- [ ] Pre-run ingestion + generation, store as a seeded demo event — Done when: a fixed demo URL loads instantly with no live Claude call
-- [ ] Hand-curate 2–3 "judge" attendee pages so the on-stage click is flawless — Done when: clicking a judge's name shows a polished, accurate page
-- [ ] Seed script committed so the demo is reproducible — Done when: `npm run seed:demo` rebuilds the demo event
+- [x] Assemble a real DeveloperWeek 2026 attendee list into CSV — Done when: a real-names CSV exists *(scraped **448 of 455** real participants from the Devpost participants tab via the logged-in session, since Devpost has no participant export; name + specialty + curated interest tags. Lives in gitignored `demo-data/devpost-ny-2026.csv` — **real non-consented data, never committed, local-demo-only**.)*
+- [x] Pre-run ingestion + generation, store as a seeded demo event — Done when: a fixed demo URL loads instantly with no live Claude call *(event slug `dwny-2026`, 448 attendees, 7 balanced interest clusters + General, 2240 connections; deterministic = zero API calls. Stable event id + page tokens across re-seeds.)*
+- [~] Hand-curate "judge" attendee pages — *deferred: the dataset is participants, not judges. The "see yourself" moment uses the organizer's own page (Ishani's) + any real attendee. Curation optional.*
+- [x] Seed script committed so the demo is reproducible — Done when: `npm run seed:demo` rebuilds the demo event *(`scripts/seed-demo.mjs`, idempotent, token/id-preserving)*
+
+> **⚠️ Deploy gate (for M7):** the live DB now contains the real scraped participant event. Do **not** deploy a public site against it. Before M7, either point prod at a separate Supabase with a **synthetic** dataset, or remove the `dwny-2026` event from the deployed DB. Keep the scraped data local-only.
 
 ---
 
