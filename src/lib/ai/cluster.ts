@@ -39,6 +39,7 @@ export function computeClusters(
   opts: { maxClusters?: number } = {},
 ): ComputedCluster[] {
   const maxClusters = opts.maxClusters ?? 8;
+  const n = attendees.length;
 
   // tag frequency (by attendee) + a display label per normalized tag
   const freq = new Map<string, number>();
@@ -54,19 +55,38 @@ export function computeClusters(
     }
   }
 
-  // each attendee -> their most popular tag (ties broken alphabetically for determinism)
-  const buckets = new Map<string, string[]>();
+  // Cluster *themes* are the most common interests; everyone is then assigned
+  // to whichever of THEIR themes currently has the fewest members. This load
+  // balances sizes (no single blob) while keeping themes recognizable. People
+  // who hold none of the top themes fall into General.
+  void n;
+  // Meta-flags that aren't real topics — never used as a cluster theme.
+  const NON_THEMES = new Set(["beginner friendly", "open ended"]);
+  const themeCount = Math.max(1, maxClusters - 1);
+  const seeds = [...freq.entries()]
+    .filter(([tag]) => !NON_THEMES.has(tag))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, themeCount)
+    .map(([tag]) => tag);
+  const seedSet = new Set(seeds);
+
+  const buckets = new Map<string, string[]>(seeds.map((s) => [s, []]));
   const general: string[] = [];
   for (const a of attendees) {
     const tags = [...new Set(a.interests.map(normalizeTag))].filter(Boolean);
-    if (tags.length === 0) {
+    const owned = tags.filter((t) => seedSet.has(t));
+    if (owned.length === 0) {
       general.push(a.id);
       continue;
     }
-    tags.sort((x, y) => (freq.get(y)! - freq.get(x)!) || x.localeCompare(y));
-    const primary = tags[0];
-    if (!buckets.has(primary)) buckets.set(primary, []);
-    buckets.get(primary)!.push(a.id);
+    // smallest current bucket wins (balance); ties → stronger theme, then alpha
+    owned.sort(
+      (x, y) =>
+        buckets.get(x)!.length - buckets.get(y)!.length ||
+        freq.get(y)! - freq.get(x)! ||
+        x.localeCompare(y),
+    );
+    buckets.get(owned[0])!.push(a.id);
   }
 
   // build clusters, demoting singletons to General
