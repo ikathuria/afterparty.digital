@@ -102,6 +102,7 @@ export default async function AfterpartyPage({
         <div className="mt-12">
           <AfterpartyBoard
             token={token}
+            eventName={event!.name}
             you={{ id: you!.id, name: you!.name }}
             initialRecommendations={recommendations}
             initialMarked={marked}

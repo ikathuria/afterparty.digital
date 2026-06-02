@@ -1,0 +1,12 @@
+
+> afterparty.digital@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.7 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.20.10.8:3000
+- Environments: .env.local
+✓ Ready in 925ms
+
+ GET /p/7aWZSezXnbYSZh2- 200 in 3.0s (next.js: 1036ms, application-code: 1920ms)
+ GET /p/7aWZSezXnbYSZh2- 200 in 556ms (next.js: 18ms, application-code: 538ms)
