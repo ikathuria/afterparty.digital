@@ -20,12 +20,21 @@ export interface DashboardStats {
   topTheme: string | null;
 }
 
+export interface RosterPerson {
+  id: string;
+  name: string;
+  title: string | null;
+  company: string | null;
+  cluster: number;
+}
+
 export interface DashboardData {
   found: boolean;
   event?: { name: string; dissolvesAt: string | null };
   stats?: DashboardStats;
   clusters?: { label: string; size: number }[];
   graph?: { nodes: RoomNode[]; links: RoomLink[] };
+  roster?: RosterPerson[];
 }
 
 function pairKey(a: string, b: string) {
@@ -49,7 +58,7 @@ export async function getDashboard(eventId: string): Promise<DashboardData> {
 
   const [{ data: attendees = [] }, { data: clusterRows = [] }, { data: conns = [] }] =
     await Promise.all([
-      supabase.from("attendees").select("id, name").eq("event_id", eventId),
+      supabase.from("attendees").select("id, name, title, company").eq("event_id", eventId),
       supabase.from("clusters").select("label, attendee_ids").eq("event_id", eventId),
       supabase.from("connections").select("source_attendee_id, target_attendee_id, kind").eq("event_id", eventId),
     ]);
@@ -104,5 +113,12 @@ export async function getDashboard(eventId: string): Promise<DashboardData> {
     },
     clusters: sized,
     graph: { nodes, links },
+    roster: att.map((a) => ({
+      id: a.id,
+      name: a.name,
+      title: (a as { title: string | null }).title ?? null,
+      company: (a as { company: string | null }).company ?? null,
+      cluster: clusterOf.get(a.id) ?? -1,
+    })),
   };
 }

@@ -7,7 +7,15 @@ import { clusterColor } from "@/lib/cluster-colors";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
-export function RoomGraph({ nodes, links }: { nodes: RoomNode[]; links: RoomLink[] }) {
+export function RoomGraph({
+  nodes,
+  links,
+  highlightCluster = null,
+}: {
+  nodes: RoomNode[];
+  links: RoomLink[];
+  highlightCluster?: number | null;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const height = 460;
@@ -36,11 +44,13 @@ export function RoomGraph({ nodes, links }: { nodes: RoomNode[]; links: RoomLink
         nodeCanvasObject={(raw, ctx, scale) => {
           const node = raw as RoomNode & { x: number; y: number };
           const color = clusterColor(node.cluster);
+          const lit = highlightCluster === null || node.cluster === highlightCluster;
+          ctx.globalAlpha = lit ? 1 : 0.15;
           ctx.beginPath();
           ctx.arc(node.x, node.y, 5, 0, 2 * Math.PI);
           ctx.fillStyle = color;
           ctx.shadowColor = color;
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = lit ? 8 : 0;
           ctx.fill();
           ctx.shadowBlur = 0;
           if (scale > 1.5) {
@@ -51,6 +61,7 @@ export function RoomGraph({ nodes, links }: { nodes: RoomNode[]; links: RoomLink
             ctx.textBaseline = "top";
             ctx.fillText(node.name, node.x, node.y + 6);
           }
+          ctx.globalAlpha = 1;
         }}
       />
     </div>

@@ -11,18 +11,22 @@ function diff(target: number) {
   return { d, h, m, s, done: ms === 0 };
 }
 
-const Unit = ({ value, label }: { value: number; label: string }) => (
+const Unit = ({ value, label }: { value: number | null; label: string }) => (
   <div className="flex flex-col items-center">
-    <span className="text-2xl font-bold tabular-nums sm:text-3xl">{String(value).padStart(2, "0")}</span>
+    <span className="text-2xl font-bold tabular-nums sm:text-3xl">
+      {value === null ? "––" : String(value).padStart(2, "0")}
+    </span>
     <span className="text-[10px] uppercase tracking-widest text-white/60">{label}</span>
   </div>
 );
 
 export function Countdown({ dissolvesAt }: { dissolvesAt: string }) {
   const target = new Date(dissolvesAt).getTime();
-  const [t, setT] = useState(() => diff(target));
+  // Start null so the server and first client render match; populate after mount.
+  const [t, setT] = useState<ReturnType<typeof diff> | null>(null);
 
   useEffect(() => {
+    setT(diff(target));
     const id = setInterval(() => setT(diff(target)), 1000);
     return () => clearInterval(id);
   }, [target]);
@@ -33,13 +37,13 @@ export function Countdown({ dissolvesAt }: { dissolvesAt: string }) {
         This afterparty dissolves in
       </p>
       <div className="mt-3 flex items-center justify-center gap-4">
-        <Unit value={t.d} label="days" />
+        <Unit value={t?.d ?? null} label="days" />
         <span className="text-2xl text-white/30">:</span>
-        <Unit value={t.h} label="hrs" />
+        <Unit value={t?.h ?? null} label="hrs" />
         <span className="text-2xl text-white/30">:</span>
-        <Unit value={t.m} label="min" />
+        <Unit value={t?.m ?? null} label="min" />
         <span className="text-2xl text-white/30">:</span>
-        <Unit value={t.s} label="sec" />
+        <Unit value={t?.s ?? null} label="sec" />
       </div>
       <p className="mt-3 text-xs text-white/50">
         Then it&apos;s gone for good — your data isn&apos;t kept a day longer than the memory.

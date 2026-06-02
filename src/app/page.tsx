@@ -1,65 +1,128 @@
-import Image from "next/image";
+import Link from "next/link";
+import { createAdminClient } from "@/lib/supabase/server";
 
-export default function Home() {
+// Pull a live demo link from the seeded event, if present.
+async function getDemoLinks() {
+  try {
+    const supabase = createAdminClient();
+    const { data: ev } = await supabase
+      .from("events")
+      .select("id")
+      .eq("slug", "smoke-demo")
+      .maybeSingle();
+    if (!ev) return null;
+    const { data: att } = await supabase
+      .from("attendees")
+      .select("page_token")
+      .eq("event_id", ev.id)
+      .limit(1)
+      .maybeSingle();
+    return { attendee: att?.page_token ?? null, dashboard: ev.id };
+  } catch {
+    return null;
+  }
+}
+
+function Step({ n, title, body }: { n: number; title: string; body: string }) {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-fuchsia-500/20 text-sm font-bold text-fuchsia-300">
+        {n}
+      </div>
+      <h3 className="mt-4 font-semibold">{title}</h3>
+      <p className="mt-1 text-sm text-white/60">{body}</p>
     </div>
+  );
+}
+
+export default async function Home() {
+  const demo = await getDemoLinks();
+
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-[#0b0613] text-white">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-40 left-1/2 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-fuchsia-600/30 blur-[120px]" />
+        <div className="absolute top-1/2 -left-32 h-[28rem] w-[28rem] rounded-full bg-indigo-600/25 blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-[26rem] w-[26rem] rounded-full bg-amber-500/15 blur-[120px]" />
+      </div>
+
+      <div className="mx-auto max-w-5xl px-6">
+        {/* Hero */}
+        <section className="flex min-h-screen flex-col justify-center py-20">
+          <p className="text-sm font-medium uppercase tracking-[0.25em] text-fuchsia-300/80">
+            afterparty.digital
+          </p>
+          <h1 className="mt-4 max-w-3xl text-5xl font-extrabold leading-[1.05] sm:text-7xl">
+            Every event ends.{" "}
+            <span className="bg-gradient-to-r from-fuchsia-300 via-pink-300 to-amber-200 bg-clip-text text-transparent">
+              The connections shouldn&apos;t.
+            </span>
+          </h1>
+          <p className="mt-6 max-w-xl text-lg text-white/70">
+            Upload your event&apos;s attendee list. Every attendee gets a personal page — who was in
+            their room, who they should reach out to, and why — before the moment fades.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/upload"
+              className="rounded-full bg-gradient-to-r from-fuchsia-500 to-pink-500 px-6 py-3 font-medium text-white shadow-lg shadow-fuchsia-500/25 transition hover:opacity-90"
+            >
+              Start an afterparty →
+            </Link>
+            {demo?.attendee && (
+              <Link
+                href={`/p/${demo.attendee}`}
+                className="rounded-full border border-white/15 bg-white/5 px-6 py-3 font-medium text-white transition hover:bg-white/10"
+              >
+                See a live afterparty
+              </Link>
+            )}
+            {demo?.dashboard && (
+              <Link
+                href={`/dashboard/${demo.dashboard}`}
+                className="rounded-full border border-white/15 bg-white/5 px-6 py-3 font-medium text-white transition hover:bg-white/10"
+              >
+                Organizer view
+              </Link>
+            )}
+          </div>
+          <p className="mt-6 text-sm text-white/40">
+            80% of connections made at events are lost within 72 hours. This fixes that — honestly.
+          </p>
+        </section>
+
+        {/* How it works */}
+        <section className="pb-24">
+          <h2 className="text-2xl font-bold">How it works</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <Step n={1} title="Upload your artifacts" body="An attendee list is all it takes — CSV or JSON, two minutes." />
+            <Step n={2} title="AI maps the room" body="We cluster the event by interest and find who each person should meet, and why." />
+            <Step n={3} title="Everyone gets their page" body="A personal, beautiful, time-limited afterparty page. It dissolves in 30 days." />
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <h3 className="font-semibold">For attendees</h3>
+              <p className="mt-2 text-sm text-white/60">
+                The people worth meeting, a copy-ready intro for each, and a graph of your room you can
+                edit and take with you.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <h3 className="font-semibold">For organizers</h3>
+              <p className="mt-2 text-sm text-white/60">
+                The first real map of connection at your event — density, clusters, and follow-ups
+                started. ROI beyond attendance numbers.
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-10 text-sm text-white/40">
+            We never claim who you actually met — only who&apos;s worth meeting. The page dissolves in
+            30 days; the relationships don&apos;t have to.
+          </p>
+        </section>
+      </div>
+    </main>
   );
 }

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getDashboard } from "@/lib/dashboard-data";
-import { RoomGraph } from "@/components/dashboard/RoomGraph";
-import { clusterColor } from "@/lib/cluster-colors";
+import { DashboardRoom } from "@/components/dashboard/DashboardRoom";
 
 export const metadata: Metadata = { title: "Organizer dashboard · afterparty.digital" };
 
@@ -42,7 +41,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ id: 
     );
   }
 
-  const { event, stats, clusters = [], graph } = data;
+  const { event, stats, clusters = [], graph, roster = [] } = data;
 
   return (
     <Shell>
@@ -65,30 +64,16 @@ export default async function DashboardPage({ params }: { params: Promise<{ id: 
         <Stat value={String(stats!.followUps)} label="Follow-ups started" sub="attendees acted on a match" />
       </section>
 
-      {/* Graph */}
+      {/* Interactive room: graph + clickable legend + searchable table */}
       <section className="mt-10">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold">The room, mapped</h2>
-          <span className="text-sm text-white/50">
-            {stats!.clusters} interest clusters · top theme:{" "}
-            <span className="text-white/80">{stats!.topTheme ?? "—"}</span>
-          </span>
-        </div>
-        <RoomGraph nodes={graph!.nodes} links={graph!.links} />
-
-        {/* Cluster legend */}
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-          {clusters.map((c, i) => (
-            <span key={c.label} className="flex items-center gap-2">
-              <span
-                className="inline-block h-3 w-3 rounded-full"
-                style={{ backgroundColor: clusterColor(i), boxShadow: `0 0 8px ${clusterColor(i)}` }}
-              />
-              <span className="text-white/80">{c.label}</span>
-              <span className="text-white/40">{c.size}</span>
-            </span>
-          ))}
-        </div>
+        <DashboardRoom
+          nodes={graph!.nodes}
+          links={graph!.links}
+          clusters={clusters}
+          roster={roster}
+          totalClusters={stats!.clusters}
+          topTheme={stats!.topTheme}
+        />
       </section>
 
       <footer className="mt-14 border-t border-white/10 pt-6 text-xs text-white/40">
