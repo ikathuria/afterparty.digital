@@ -1,22 +1,28 @@
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 
-// Pull a live demo link from the seeded event, if present.
+// Pull live demo links from the seeded event. Prefers the real DeveloperWeek
+// event; "see a live afterparty" prefers a recognizable attendee.
 async function getDemoLinks() {
   try {
     const supabase = createAdminClient();
-    const { data: ev } = await supabase
-      .from("events")
-      .select("id")
-      .eq("slug", "smoke-demo")
-      .maybeSingle();
+    let ev = (await supabase.from("events").select("id").eq("slug", "dwny-2026").maybeSingle()).data;
+    if (!ev) ev = (await supabase.from("events").select("id").eq("slug", "smoke-demo").maybeSingle()).data;
     if (!ev) return null;
-    const { data: att } = await supabase
-      .from("attendees")
-      .select("page_token")
-      .eq("event_id", ev.id)
-      .limit(1)
-      .maybeSingle();
+
+    let att = (
+      await supabase
+        .from("attendees")
+        .select("page_token")
+        .eq("event_id", ev.id)
+        .eq("name", "Ishani Kathuria")
+        .maybeSingle()
+    ).data;
+    if (!att) {
+      att = (
+        await supabase.from("attendees").select("page_token").eq("event_id", ev.id).limit(1).maybeSingle()
+      ).data;
+    }
     return { attendee: att?.page_token ?? null, dashboard: ev.id };
   } catch {
     return null;
