@@ -59,9 +59,13 @@ export default async function DashboardPage({ params }: { params: Promise<{ id: 
       {/* Stats */}
       <section className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat value={String(stats!.attendees)} label="In the room" sub="attendees" />
-        <Stat value={`${stats!.density}%`} label="Connection density" sub="of all possible pairs mapped" />
         <Stat value={String(stats!.mappedConnections)} label="Connections mapped" sub="suggested introductions" />
-        <Stat value={String(stats!.followUps)} label="Follow-ups started" sub="attendees acted on a match" />
+        <Stat
+          value={stats!.attendees > 0 ? ((stats!.mappedConnections * 2) / stats!.attendees).toFixed(1) : "0"}
+          label="Avg per attendee"
+          sub="intros each, on average"
+        />
+        <Stat value={String(stats!.clusters)} label="Interest clusters" sub={stats!.topTheme ? `top: ${stats!.topTheme}` : "communities"} />
       </section>
 
       {/* Interactive room: graph + clickable legend + searchable table */}

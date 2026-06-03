@@ -8,6 +8,7 @@ export interface RoomNode {
 export interface RoomLink {
   source: string;
   target: string;
+  cluster: number; // shared cluster index (for coloring)
 }
 
 export interface DashboardStats {
@@ -95,10 +96,15 @@ export async function getDashboard(eventId: string): Promise<DashboardData> {
     name: a.name,
     cluster: clusterOf.get(a.id) ?? -1,
   }));
-  const links: RoomLink[] = [...recPairs].map((k) => {
+  // Only keep edges WITHIN a cluster — this makes the force layout separate the
+  // communities visually instead of collapsing into one hairball at 448 nodes.
+  const links: RoomLink[] = [];
+  for (const k of recPairs) {
     const [source, target] = k.split("|");
-    return { source, target };
-  });
+    const cs = clusterOf.get(source);
+    const ct = clusterOf.get(target);
+    if (cs !== undefined && cs === ct) links.push({ source, target, cluster: cs });
+  }
 
   return {
     found: true,

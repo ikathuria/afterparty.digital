@@ -38,8 +38,12 @@ export function RoomGraph({
         graphData={{ nodes: structuredClone(nodes), links: structuredClone(links) }}
         backgroundColor="rgba(0,0,0,0)"
         nodeRelSize={5}
-        linkColor={() => "rgba(255,255,255,0.12)"}
-        linkWidth={1}
+        linkColor={(l: { cluster?: number; source?: unknown; target?: unknown }) => {
+          const c = typeof l.cluster === "number" ? l.cluster : -1;
+          const lit = highlightCluster === null || c === highlightCluster;
+          return lit ? clusterColor(c) + "55" : "rgba(255,255,255,0.04)";
+        }}
+        linkWidth={0.7}
         cooldownTicks={100}
         nodeCanvasObject={(raw, ctx, scale) => {
           const node = raw as RoomNode & { x: number; y: number };
