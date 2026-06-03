@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   title: "afterparty.digital — every event ends, the connections shouldn't",
   description:
     "An AI-powered post-event space. Every attendee gets a personal page of who to reach out to — before it dissolves.",
+  // Demo carries real, non-consented data — keep it out of search engines.
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

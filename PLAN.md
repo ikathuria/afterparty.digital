@@ -146,10 +146,13 @@ Tasks:
 ### Milestone 7: Deploy *(Day 9 AM)*
 **Goal:** Live at the real domain.
 
+> **Decision:** deploying **with the real dataset**, so the whole site is **password-gated** (user choice) — never publicly accessible/indexable. Gate built; deploy + DNS need the user's Vercel account.
+
 Tasks:
-- [ ] Deploy to Vercel, set all env vars — Done when: production URL serves the demo page
-- [ ] Point `afterparty.digital` DNS to Vercel — Done when: https://afterparty.digital loads the landing page
-- [ ] Static landing + pricing page (Free / Pro $299 / Enterprise) — Done when: pitch-ready marketing page is live
+- [x] **Password gate for the real-data deploy** — `src/proxy.ts` (Next 16 renamed `middleware`→`proxy`): HTTP Basic Auth on every route, active only when `SITE_PASSWORD` is set (local dev stays open). `robots:{index:false}` added. Verified 401 without / 200 with password. Deploy guide in `DEPLOY.md`.
+- [ ] Deploy to Vercel, set env vars incl. `SITE_PASSWORD` — Done when: production URL prompts for password then serves the demo *(needs user's Vercel account — steps in `DEPLOY.md`)*
+- [ ] Point `afterparty.digital` DNS to Vercel — Done when: https://afterparty.digital loads (behind the gate)
+- [ ] Landing page — ✅ already built at `/` in the interactivity pass; pricing section still TODO (Free / Pro $299 / Enterprise)
 
 ---
 
