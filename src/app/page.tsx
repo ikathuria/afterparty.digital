@@ -1,29 +1,26 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
+
+// Always fetch the current demo links at request time (don't bake at build).
+export const dynamic = "force-dynamic";
 
 // Pull live demo links from the seeded event. Prefers the real DeveloperWeek
 // event; "see a live afterparty" prefers a recognizable attendee.
 async function getDemoLinks() {
   try {
-    const supabase = createAdminClient();
-    let ev = (await supabase.from("events").select("id").eq("slug", "dwny-2026").maybeSingle()).data;
-    if (!ev) ev = (await supabase.from("events").select("id").eq("slug", "smoke-demo").maybeSingle()).data;
+    const sql = db();
+    const evRows = (await sql`
+      select id from events where slug in ('dwny-2026', 'smoke-demo')
+      order by case slug when 'dwny-2026' then 0 else 1 end limit 1
+    `) as { id: string }[];
+    const ev = evRows[0];
     if (!ev) return null;
 
-    let att = (
-      await supabase
-        .from("attendees")
-        .select("page_token")
-        .eq("event_id", ev.id)
-        .eq("name", "Ishani Kathuria")
-        .maybeSingle()
-    ).data;
-    if (!att) {
-      att = (
-        await supabase.from("attendees").select("page_token").eq("event_id", ev.id).limit(1).maybeSingle()
-      ).data;
-    }
-    return { attendee: att?.page_token ?? null, dashboard: ev.id };
+    const attRows = (await sql`
+      select page_token from attendees where event_id = ${ev.id}
+      order by case when name = 'Ishani Kathuria' then 0 else 1 end, created_at limit 1
+    `) as { page_token: string }[];
+    return { attendee: attRows[0]?.page_token ?? null, dashboard: ev.id };
   } catch {
     return null;
   }
