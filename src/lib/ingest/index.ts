@@ -3,7 +3,7 @@
 // Discord / photos / recordings are intentionally not implemented (no
 // interaction data is available, and faking it would break the honesty rule).
 
-import type { AttendeeRow } from "@/lib/types";
+import type { AttendeeRow } from "@/lib/supabase/types";
 
 /** A normalized attendee, before it is assigned an id / page_token / event_id. */
 export type ParsedAttendee = Pick<

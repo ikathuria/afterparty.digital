@@ -1,27 +1,37 @@
 "use server";
 
-import { db } from "@/lib/db";
-import type { EventRow } from "@/lib/types";
+import { createAdminClient } from "@/lib/supabase/server";
+import type { EventRow } from "@/lib/supabase/types";
 
 /**
- * Create an event. Used by ingestion / seed flows.
+ * Server action proving the data layer round-trips (Milestone 1 done-when:
+ * "a server action can read/write events"). Uses the service-role client so
+ * ingestion/seed flows can create events without an authenticated organizer.
  */
 export async function createEvent(input: {
   name: string;
   slug: string;
   eventDate?: string;
 }): Promise<EventRow> {
-  const sql = db();
-  const rows = (await sql`
-    insert into events (name, slug, event_date)
-    values (${input.name}, ${input.slug}, ${input.eventDate ?? null})
-    returning *
-  `) as EventRow[];
-  return rows[0];
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("events")
+    .insert({ name: input.name, slug: input.slug, event_date: input.eventDate ?? null })
+    .select()
+    .single();
+
+  if (error) throw new Error(`createEvent failed: ${error.message}`);
+  return data as EventRow;
 }
 
 export async function getEventBySlug(slug: string): Promise<EventRow | null> {
-  const sql = db();
-  const rows = (await sql`select * from events where slug = ${slug} limit 1`) as EventRow[];
-  return rows[0] ?? null;
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select()
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) throw new Error(`getEventBySlug failed: ${error.message}`);
+  return (data as EventRow) ?? null;
 }

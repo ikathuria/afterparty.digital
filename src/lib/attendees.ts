@@ -1,11 +1,11 @@
 "use server";
 
-import { db, insertRows } from "@/lib/db";
+import { createAdminClient } from "@/lib/supabase/server";
 import { parseAttendeeFile } from "@/lib/ingest/parse";
 import { inferMissingInterests } from "@/lib/ingest/normalize";
 import { generateForEvent } from "@/lib/generate";
 import { generatePageToken } from "@/lib/tokens";
-import type { AttendeeRow, EventRow } from "@/lib/types";
+import type { AttendeeRow } from "@/lib/supabase/types";
 
 function slugify(input: string): string {
   const base = input
@@ -31,7 +31,8 @@ export interface IngestResult {
 /**
  * Full ingestion: parse an uploaded attendee list, infer missing interests,
  * create an event, and insert one attendee row per person with a unique
- * page_token, then run deterministic generation.
+ * page_token. Uses the service-role client (RLS-bypassing) since ingestion is
+ * an organizer/server action.
  */
 export async function ingestAttendeeList(formData: FormData): Promise<IngestResult> {
   const eventName = String(formData.get("eventName") ?? "").trim();
@@ -43,7 +44,8 @@ export async function ingestAttendeeList(formData: FormData): Promise<IngestResu
 
   let parsed;
   try {
-    parsed = parseAttendeeFile(file.name, await file.text());
+    const text = await file.text();
+    parsed = parseAttendeeFile(file.name, text);
   } catch (e) {
     return { ok: false, error: `Could not parse file: ${(e as Error).message}` };
   }
@@ -53,50 +55,51 @@ export async function ingestAttendeeList(formData: FormData): Promise<IngestResu
   // Optional AI enrichment — no-ops without ANTHROPIC_API_KEY.
   const enriched = await inferMissingInterests(parsed);
 
-  const sql = db();
+  const supabase = createAdminClient();
   const slug = slugify(eventName);
 
-  try {
-    const eventRows = (await sql`
-      insert into events (name, slug, status) values (${eventName}, ${slug}, 'draft')
-      returning *
-    `) as EventRow[];
-    const event = eventRows[0];
+  const { data: event, error: evErr } = await supabase
+    .from("events")
+    .insert({ name: eventName, slug, status: "draft" })
+    .select()
+    .single();
+  if (evErr || !event) return { ok: false, error: `Event create failed: ${evErr?.message}` };
 
-    const rows = enriched.map((a) => ({
-      event_id: event.id,
+  const rows = enriched.map((a) => ({
+    event_id: event.id,
+    name: a.name,
+    title: a.title,
+    company: a.company,
+    bio: a.bio,
+    interests: a.interests,
+    socials: a.socials,
+    page_token: generatePageToken(),
+  }));
+
+  const { data: inserted, error: atErr } = await supabase
+    .from("attendees")
+    .insert(rows)
+    .select("name, title, page_token, interests");
+  if (atErr || !inserted)
+    return { ok: false, error: `Attendee insert failed: ${atErr?.message}` };
+
+  const attendees = inserted as Pick<AttendeeRow, "name" | "title" | "page_token" | "interests">[];
+
+  // Run the (key-free, deterministic) afterparty generation: clusters + matches.
+  const gen = await generateForEvent(event.id);
+
+  return {
+    ok: true,
+    eventId: event.id,
+    eventSlug: event.slug,
+    count: attendees.length,
+    withInterests: attendees.filter((a) => a.interests.length > 0).length,
+    clusters: gen.ok ? gen.clusters : undefined,
+    connections: gen.ok ? gen.connections : undefined,
+    sample: attendees.slice(0, 5).map((a) => ({
       name: a.name,
       title: a.title,
-      company: a.company,
-      bio: a.bio,
-      interests: a.interests,
-      socials: a.socials,
-      page_token: generatePageToken(),
-    }));
-    await insertRows(
-      "attendees",
-      ["event_id", "name", "title", "company", "bio", "interests", "socials", "page_token"],
-      rows,
-      { interests: "text[]", socials: "jsonb" },
-    );
-
-    const inserted = (await sql`
-      select name, title, page_token, interests from attendees where event_id = ${event.id}
-    `) as Pick<AttendeeRow, "name" | "title" | "page_token" | "interests">[];
-
-    const gen = await generateForEvent(event.id);
-
-    return {
-      ok: true,
-      eventId: event.id,
-      eventSlug: event.slug,
-      count: inserted.length,
-      withInterests: inserted.filter((a) => a.interests.length > 0).length,
-      clusters: gen.ok ? gen.clusters : undefined,
-      connections: gen.ok ? gen.connections : undefined,
-      sample: inserted.slice(0, 5).map((a) => ({ name: a.name, title: a.title, page_token: a.page_token })),
-    };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
+      page_token: a.page_token,
+    })),
+  };
 }

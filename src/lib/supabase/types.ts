@@ -1,4 +1,5 @@
-// Database row types, mirroring db/schema.sql.
+// Hand-maintained database types mirroring supabase/migrations/0001_init.sql.
+// Regenerate later with `supabase gen types typescript` once the project is live.
 
 export type ConnectionKind = "recommended" | "marked" | "confirmed";
 export type EventStatus = "draft" | "processing" | "live" | "dissolved";
@@ -34,7 +35,6 @@ export interface ConnectionRow {
   target_attendee_id: string;
   kind: ConnectionKind;
   reason: string | null;
-  note: string | null;
   created_at: string;
 }
 

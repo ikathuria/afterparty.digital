@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export interface RoomNode {
   id: string;
@@ -48,23 +48,25 @@ function pairKey(a: string, b: string) {
  * access model. No login required.
  */
 export async function getDashboard(eventId: string): Promise<DashboardData> {
-  const sql = db();
+  const supabase = createAdminClient();
 
-  const eventRows = (await sql`
-    select name, dissolves_at from events where id = ${eventId} limit 1
-  `) as { name: string; dissolves_at: string | null }[];
-  const event = eventRows[0];
+  const { data: event } = await supabase
+    .from("events")
+    .select("name, dissolves_at")
+    .eq("id", eventId)
+    .maybeSingle();
   if (!event) return { found: false };
 
-  const [att, clusters, connections] = (await Promise.all([
-    sql`select id, name, title, company from attendees where event_id = ${eventId}`,
-    sql`select label, attendee_ids from clusters where event_id = ${eventId}`,
-    sql`select source_attendee_id, target_attendee_id, kind from connections where event_id = ${eventId}`,
-  ])) as [
-    { id: string; name: string; title: string | null; company: string | null }[],
-    { label: string; attendee_ids: string[] }[],
-    { source_attendee_id: string; target_attendee_id: string; kind: string }[],
-  ];
+  const [{ data: attendees = [] }, { data: clusterRows = [] }, { data: conns = [] }] =
+    await Promise.all([
+      supabase.from("attendees").select("id, name, title, company").eq("event_id", eventId),
+      supabase.from("clusters").select("label, attendee_ids").eq("event_id", eventId),
+      supabase.from("connections").select("source_attendee_id, target_attendee_id, kind").eq("event_id", eventId),
+    ]);
+
+  const att = attendees ?? [];
+  const clusters = clusterRows ?? [];
+  const connections = conns ?? [];
 
   // attendee -> cluster index
   const clusterOf = new Map<string, number>();

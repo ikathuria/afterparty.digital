@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
-import type { AttendeeRow, EventRow } from "@/lib/types";
+import { createAdminClient } from "@/lib/supabase/server";
+import type { AttendeeRow, EventRow } from "@/lib/supabase/types";
 
 export interface PersonLite {
   id: string;
@@ -27,31 +27,30 @@ export interface AfterpartyData {
   others?: PersonLite[]; // remaining attendees, for "add someone we missed"
 }
 
-type RosterRow = Pick<AttendeeRow, "id" | "name" | "title" | "company" | "socials">;
-type ConnRow = { target_attendee_id: string; kind: string; reason: string | null; note: string | null };
-
-function toLite(a: RosterRow): PersonLite {
+function toLite(a: Pick<AttendeeRow, "id" | "name" | "title" | "company" | "socials">): PersonLite {
   return { id: a.id, name: a.name, title: a.title, company: a.company, socials: a.socials };
 }
 
 /**
- * Load everything an afterparty page needs, keyed by the unguessable page_token
- * (the bearer credential). Returns a `state` the page renders on.
+ * Load everything an afterparty page needs, keyed by the unguessable
+ * page_token. Uses the service-role client (RLS-bypassing) after the token
+ * acts as the bearer credential. Returns a `state` the page renders on.
  */
 export async function getAfterpartyByToken(token: string): Promise<AfterpartyData> {
-  const sql = db();
+  const supabase = createAdminClient();
 
-  const meRows = (await sql`
-    select id, event_id, name, title, company, bio, interests, socials
-    from attendees where page_token = ${token} limit 1
-  `) as (Pick<AttendeeRow, "id" | "event_id" | "name" | "title" | "company" | "bio" | "interests" | "socials">)[];
-  const me = meRows[0];
+  const { data: me } = await supabase
+    .from("attendees")
+    .select("id, event_id, name, title, company, bio, interests, socials")
+    .eq("page_token", token)
+    .maybeSingle();
   if (!me) return { state: "not_found" };
 
-  const eventRows = (await sql`
-    select name, status, dissolves_at, event_date from events where id = ${me.event_id} limit 1
-  `) as Pick<EventRow, "name" | "status" | "dissolves_at" | "event_date">[];
-  const event = eventRows[0];
+  const { data: event } = await supabase
+    .from("events")
+    .select("name, status, dissolves_at, event_date")
+    .eq("id", me.event_id)
+    .single<Pick<EventRow, "name" | "status" | "dissolves_at" | "event_date">>();
   if (!event) return { state: "not_found" };
 
   const dissolved =
@@ -61,44 +60,66 @@ export async function getAfterpartyByToken(token: string): Promise<AfterpartyDat
     return { state: "dissolved", event: { name: event.name, dissolvesAt: event.dissolves_at, attendeeCount: 0 } };
   }
 
-  const roster = (await sql`
-    select id, name, title, company, socials from attendees where event_id = ${me.event_id}
-  `) as RosterRow[];
-  const rosterById = new Map(roster.map((r) => [r.id, r]));
+  // roster (everyone in the event)
+  const { data: roster = [] } = await supabase
+    .from("attendees")
+    .select("id, name, title, company, socials")
+    .eq("event_id", me.event_id);
+  const rosterById = new Map((roster ?? []).map((r) => [r.id, r]));
 
-  const conns = (await sql`
-    select target_attendee_id, kind, reason, note
-    from connections where source_attendee_id = ${me.id}
-  `) as ConnRow[];
+  // this attendee's connections
+  const { data: conns = [] } = await supabase
+    .from("connections")
+    .select("target_attendee_id, kind, reason")
+    .eq("source_attendee_id", me.id);
 
-  const confirmed = new Set(conns.filter((c) => c.kind === "confirmed").map((c) => c.target_attendee_id));
-  const markedIds = conns.filter((c) => c.kind === "marked").map((c) => c.target_attendee_id);
+  const confirmed = new Set(
+    (conns ?? []).filter((c) => c.kind === "confirmed").map((c) => c.target_attendee_id),
+  );
+  const markedIds = (conns ?? []).filter((c) => c.kind === "marked").map((c) => c.target_attendee_id);
 
-  // best note per target (confirmed > marked > recommended)
+  // best note per target (confirmed > marked > recommended). Fetched separately
+  // and error-tolerantly so the page works even before the `note` migration.
   const KIND_RANK: Record<string, number> = { confirmed: 3, marked: 2, recommended: 1 };
   const noteByTarget = new Map<string, string>();
-  for (const c of [...conns].sort((a, b) => (KIND_RANK[a.kind] ?? 0) - (KIND_RANK[b.kind] ?? 0))) {
-    if (c.note) noteByTarget.set(c.target_attendee_id, c.note);
+  const { data: noteRows, error: noteErr } = await supabase
+    .from("connections")
+    .select("target_attendee_id, kind, note")
+    .eq("source_attendee_id", me.id);
+  if (!noteErr && noteRows) {
+    for (const c of [...noteRows].sort((a, b) => (KIND_RANK[a.kind] ?? 0) - (KIND_RANK[b.kind] ?? 0))) {
+      if (c.note) noteByTarget.set(c.target_attendee_id, c.note as string);
+    }
   }
 
-  const recommendations: Recommendation[] = conns
+  const recommendations: Recommendation[] = (conns ?? [])
     .filter((c) => c.kind === "recommended" && rosterById.has(c.target_attendee_id))
     .map((c) => {
       const t = rosterById.get(c.target_attendee_id)!;
-      return { ...toLite(t), reason: c.reason, confirmed: confirmed.has(t.id), note: noteByTarget.get(t.id) ?? null };
+      return {
+        ...toLite(t),
+        reason: c.reason,
+        confirmed: confirmed.has(t.id),
+        note: noteByTarget.get(t.id) ?? null,
+      };
     });
 
   const marked: PersonLite[] = markedIds
     .filter((id) => rosterById.has(id))
     .map((id) => ({ ...toLite(rosterById.get(id)!), note: noteByTarget.get(id) ?? null }));
 
-  const clusterRows = (await sql`
-    select label, attendee_ids from clusters where event_id = ${me.event_id}
-  `) as { label: string; attendee_ids: string[] }[];
-  const clusters = clusterRows.filter((c) => c.attendee_ids.includes(me.id)).map((c) => c.label);
+  // clusters this attendee belongs to
+  const { data: clusterRows = [] } = await supabase
+    .from("clusters")
+    .select("label, attendee_ids")
+    .eq("event_id", me.event_id);
+  const clusters = (clusterRows ?? [])
+    .filter((c) => (c.attendee_ids as string[]).includes(me.id))
+    .map((c) => c.label as string);
 
+  // "others" = roster minus me, minus recommended, minus marked
   const shown = new Set<string>([me.id, ...recommendations.map((r) => r.id), ...markedIds]);
-  const others = roster.filter((r) => !shown.has(r.id)).map(toLite);
+  const others = (roster ?? []).filter((r) => !shown.has(r.id)).map(toLite);
 
   return {
     state: "live",
@@ -111,7 +132,7 @@ export async function getAfterpartyByToken(token: string): Promise<AfterpartyDat
       interests: me.interests,
       socials: me.socials,
     },
-    event: { name: event.name, dissolvesAt: event.dissolves_at, attendeeCount: roster.length },
+    event: { name: event.name, dissolvesAt: event.dissolves_at, attendeeCount: roster?.length ?? 0 },
     clusters,
     recommendations,
     marked,
