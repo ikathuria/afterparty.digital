@@ -46,7 +46,7 @@ interest lists), then runs clustering + matchmaking automatically.
 |---|---|
 | Framework | Next.js 16 (App Router, `src/`) · React 19 · TypeScript |
 | Styling | Tailwind v4 · shadcn/ui · sonner |
-| Database | **Neon** (serverless Postgres) via `@neondatabase/serverless`, raw SQL |
+| Database | **Supabase** (Postgres) via `@supabase/supabase-js` |
 | AI core | Deterministic clustering + matchmaking (zero API calls); optional Anthropic Claude for interest enrichment |
 | Graph viz | `react-force-graph-2d` |
 | Hosting | Vercel; whole site password-gated via `src/proxy.ts` |
@@ -59,14 +59,14 @@ enhancement (interest inference), not a dependency.
 
 ```bash
 npm install
-cp .env.example .env.local        # set DATABASE_URL (Neon pooled connection string)
-npm run db:setup                  # apply db/schema.sql to your Neon database
+cp .env.example .env.local        # set the Supabase URL + keys
+# apply supabase/migrations/*.sql once (Supabase SQL editor or CLI)
 npm run seed:demo                 # optional: seed a demo event from a local CSV
 npm run dev                       # http://localhost:3000
 ```
 
 - `npm test` — parser, clustering, and matchmaking unit tests
-- `npm run db:setup` — apply [`db/schema.sql`](./db/schema.sql) (idempotent)
+- Database schema: [`supabase/migrations/`](./supabase/migrations) (see [`supabase/README.md`](./supabase/README.md))
 - Deployment + security model: [`DEPLOY.md`](./DEPLOY.md)
 
 ## Privacy & security model

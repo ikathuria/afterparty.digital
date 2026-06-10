@@ -133,7 +133,7 @@ present), never a hard dependency.
 |---|---|---|
 | Framework | **Next.js 16** (App Router, `src/`), React 19, TypeScript | Server Components + Server Actions keep the data layer on the server; fast to build, Vercel-native. |
 | Styling | **Tailwind v4**, shadcn/ui, sonner | Polished, responsive, "vibrant & celebratory" theme without bespoke design time. |
-| Database | **Neon** (serverless Postgres) via `@neondatabase/serverless`, hand-written SQL | Serverless Postgres that auto-resumes (reliable for a demo revisited weeks later); raw SQL keeps the data layer transparent and dependency-light. |
+| Database | **Supabase** (Postgres) via `@supabase/supabase-js` | Managed Postgres with a clean query layer and Row-Level Security; relational schema (events → attendees → connections → clusters) fits the domain. |
 | Graph viz | **react-force-graph-2d** | Canvas/WebGL force-directed graphs that stay legible at hundreds of nodes. |
 | AI | Deterministic engine + optional **Anthropic Claude** | Zero-cost, reproducible core; AI as enhancement, not crutch. |
 | Hosting | **Vercel**, gated by a custom `src/proxy.ts` | Whole site behind HTTP Basic Auth + `noindex` when `SITE_PASSWORD` is set. |
@@ -141,9 +141,9 @@ present), never a hard dependency.
 **Notable engineering details**
 - Next.js 16 renamed the `middleware` convention to `proxy` — the password gate
   is implemented correctly against the new API (Node runtime).
-- A generic chunked batch-insert helper handles Postgres `text[]`, `uuid[]`, and
-  `jsonb` serialization for fast bulk seeding (hundreds of rows, thousands of
-  edges) over the Neon HTTP driver.
+- The relational schema models `text[]` interest tags and `jsonb` socials
+  directly, with Row-Level Security enabled and access mediated by unguessable
+  page tokens in server actions.
 - Unit tests (Node's built-in test runner) cover the parser, clustering, and the
   honesty rule, run with Node 24's native TypeScript execution — no test
   framework dependency.
