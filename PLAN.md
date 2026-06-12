@@ -1,6 +1,6 @@
-# afterparty.digital
+# afterparty.digital — Phase 2: Accounts, Multi-Event, Real Connections
 
-> "Every event ends. The connections shouldn't." — An AI-powered post-event platform that turns an event's attendee list into a personal, time-limited "afterparty" page for each attendee: who was in your room, the people you should reach out to and why, and an editable connection graph that dissolves in 30 days. Built solo in 9 days for the DeveloperWeek 2026 hackathon.
+> Post-hackathon evolution of afterparty.digital ("Every event ends. The connections shouldn't."): LinkedIn sign-in for everyone, a cross-event personal dashboard, and mutual "we met" confirmation that is as automatic as legitimately possible. The hackathon build (Phase 1, complete) is archived at `docs/01-hackathon-plan.md`.
 
 ---
 
@@ -8,199 +8,155 @@
 
 | | |
 |---|---|
-| **Market** | Crowded but mis-aimed — Brella, Grip, Swapcard, Remo, EventHex all do AI matchmaking, but every one of them is a *during-event* tool. AI matchmaking is now baseline, not a differentiator. The **post-event "afterparty" framing is the open lane** nobody owns. |
-| **Feasibility** | Medium — no single hard part, but scope discipline is the real risk. With only an attendee list there is **no interaction data**, so the product must be honest: recommendations + clusters + editable graph, never fabricated "who you talked to." |
-| **Free to build** | Mostly — Vercel, Supabase, and react-force-graph are free. Only unavoidable cost is the Anthropic API (cents per page at demo scale; pre-generate demo pages so the live pitch makes zero API calls). |
-| **Monetization** | Story for the pitch, not built: Free (≤50 attendees) → Pro $299/event → Enterprise (white-label, CRM). A static pricing page is the only thing built in 9 days. |
+| **Market** | Crowded during-event (Swapcard, Brella, Blinq badges all do QR contact exchange), but the **post-event afterparty lane is still open**. Phase 2 keeps that wedge and adds the retention loop competitors lack: your connections accumulate across events under one login. |
+| **Feasibility** | Medium — LinkedIn OIDC via Supabase is a documented, free path. The hard part is **identity plumbing** (claiming attendee rows, RLS) on a codebase that deliberately had zero auth. |
+| **Free to build** | Yes — Supabase free tier includes the LinkedIn (OIDC) provider; LinkedIn developer app is free; no new paid services. |
+| **Monetization** | Unchanged pitch (Free / Pro $299/event / Enterprise). Confirmed-meeting counts become the organizer ROI metric that justifies Pro. |
 
-### The honesty rule (read before building anything)
-With **only an attendee list**, the app must NEVER claim to know who met whom. It knows who was *present* and can *recommend* who to connect with. Framing is always **post-event second chance**, never during-event planning:
-> "You shared a room with hundreds of people you'll never meet again. Here are the 5 you should reach out to — before the afterparty ends."
+### Constraints carried over from Phase 1 (still binding)
 
-Edges in the graph mean **"recommended"** or **"I marked them,"** never "they talked." This is what keeps the demo defensible on stage.
-
----
-
-## Tech Stack
-
-| Layer | Choice | Reason |
-|---|---|---|
-| Frontend | **Next.js 15 (App Router) + Tailwind + shadcn/ui** | Solo-friendly, beautiful fast, Vercel-native. shadcn for polished components without design time. |
-| Backend | **Next.js API routes / Server Actions** | No separate service. Claude calls and ingestion run server-side. |
-| Database | **Supabase (Postgres)** | Free tier, relational fits events→attendees→connections, built-in storage for uploads, RLS for per-attendee page access. |
-| AI / LLM | **Anthropic Claude API** (`claude-opus-4-8` for batch generation, `claude-haiku-4-5` for cheap clustering) | Core of matchmaking, clustering, and follow-up copy. Use Batch + prompt caching for cost. |
-| Graph viz | **react-force-graph** (vasturiano) | Canvas/WebGL, handles zoom/drag/hover/click out of the box. Far faster to ship than raw D3 and won't render spaghetti. |
-| Auth | **Supabase Auth** (magic-link) — *organizer only* | Attendees need NO login (page is a tokenized link — preserves the "no app" wedge). Only organizers log in. |
-| Hosting | **Vercel** (free tier) + domain `afterparty.digital` | SSR for per-attendee pages, instant deploys. |
-| Payments | **None built** — static pricing page only | Monetization is a pitch slide, not 9-day scope. |
+1. **The honesty rule.** The product never claims to know who met whom unless **both parties attested it** (mutual confirm or in-person QR scan). Edge kinds: `recommended` (AI), `marked` (one-sided), `confirmed` (mutual). Never infer meetings.
+2. **LinkedIn's connection graph is NOT accessible.** The Connections API is partner-program-only (formal review, mostly rejected) and connection timestamps aren't exposed at all; scraping violates ToS. **Rejected approach — do not revisit.** Sign-in gives identity only: name, email, photo, and (via `/v2/userinfo`) the member id. "Automatic" confirmation therefore comes from **QR scan exchange** (physical presence), the same mechanism Swapcard/Blinq use.
+3. **The production DB contains real scraped DeveloperWeek participant data** (event `dwny-2026`, non-consented, gitignored CSV). The site is HTTP-Basic-gated via `src/proxy.ts` + `SITE_PASSWORD`. **Public signup must not launch against that dataset** — see Milestone 6.
+4. **Next.js 16 has breaking changes** (e.g. `middleware` → `proxy`). Per `AGENTS.md`: read `node_modules/next/dist/docs/` before writing framework code. Same rule for Supabase Auth — fetch current docs first, never code from memory.
+5. Deterministic AI core stays key-free; `ANTHROPIC_API_KEY` remains an optional enhancement.
 
 ---
 
-## Environment Variables
+## Tech Stack (delta only — full stack in PROJECT.md)
 
+> Versions verified against the repo's `package.json` and official docs on 2026-06-11. Re-check before coding.
+
+| Layer | Choice | Version | Reason |
+|---|---|---|---|
+| Auth | **Supabase Auth, `linkedin_oidc` provider** | supabase-js ^2.106, @supabase/ssr ^0.10 (already installed) | Built-in provider; OIDC sign-in is the one LinkedIn product open to all developers. Keep magic-link as fallback for users without LinkedIn. |
+| Sessions in Next | **@supabase/ssr** cookie-based clients | ^0.10.3 | Official pattern for Next.js App Router server components + route handlers. |
+| QR generation | **`qrcode`** (or render via `next/og`) | latest at install time | Tiny, free, server- or client-side. |
+| Email nudges (optional) | **Resend** free tier | — | Only if confirm-nudge emails are wanted; defer until Milestone 6. |
+
+New external setup (user-performed, one-time):
+- LinkedIn Developers → create app → add **"Sign In with LinkedIn using OpenID Connect"** product → copy client id/secret.
+- Supabase Dashboard → Auth → Providers → **LinkedIn (OIDC)** → paste credentials. Callback URL: `https://<project-ref>.supabase.co/auth/v1/callback` (also add it in the LinkedIn app).
+
+---
+
+## Data model changes
+
+```sql
+-- 0003: identity
+profiles (id uuid PK references auth.users, full_name, avatar_url, linkedin_url, created_at)
+attendees + user_id uuid NULL references profiles(id)   -- set when claimed
+attendees + claim_email text NULL                        -- optional: organizer-provided email for auto-match
+
+-- 0004: meeting confirmation
+connections.kind already supports 'recommended' | 'marked' | 'confirmed'
+connections + met_claimed_by uuid NULL    -- who first said "we met"
+connections + confirmed_at timestamptz NULL
+attendees + meet_code text UNIQUE         -- short random code embedded in the personal QR
 ```
-# Required
-ANTHROPIC_API_KEY=              # console.anthropic.com — for matchmaking/clustering/copy
-NEXT_PUBLIC_SUPABASE_URL=       # Supabase project settings → API
-NEXT_PUBLIC_SUPABASE_ANON_KEY=  # Supabase project settings → API (public, RLS-guarded)
-SUPABASE_SERVICE_ROLE_KEY=      # Supabase → API (server-only, ingestion + page generation)
-NEXT_PUBLIC_APP_URL=            # https://afterparty.digital (for building share links)
 
-# Optional
-PAGE_TOKEN_SECRET=              # HMAC secret for signing per-attendee page tokens
-```
-
----
-
-## Data Model (build in Milestone 1, reference throughout)
-
-- **events**: id, name, slug, organizer_id, event_date, dissolves_at, status
-- **attendees**: id, event_id, name, title, company, bio, interests[], socials(jsonb), page_token (unique), created_at
-- **connections**: id, event_id, source_attendee_id, target_attendee_id, kind (`recommended` | `marked` | `confirmed`), reason (text, AI-generated for `recommended`), created_at
-- **clusters**: id, event_id, label, theme, attendee_ids[]
-- **highlights**: id, event_id, title, body, source (optional — only if richer artifacts ever added)
-
-RLS: an attendee page is readable only with a valid `page_token`. Organizer dashboard readable only by `organizer_id`.
+RLS posture: all reads currently flow through server code using the service key; new policies must let an **authenticated user** read/update only their own `profiles` row and claimed `attendees` rows, and insert/upgrade `connections` only where they are source or target. Migrations are pasted into the Supabase SQL editor by the user (no DDL via service key).
 
 ---
 
 ## Milestones
 
-> Maps to a 9-day solo sprint. **Demo viability is the priority** — a real DeveloperWeek attendee gets a stunning page that survives scrutiny beats four half-built features. Build the hero deep, fake the rest in the UI.
-
-### Milestone 1: Scaffold + Data Layer *(Day 1)*
-**Goal:** App runs locally, Supabase schema live, env wired.
+### Milestone 1: Auth foundation
+**Goal:** Anyone can sign in with LinkedIn; sessions work across server components and route handlers; signed-in state is visible in the header.
 
 Tasks:
-- [x] Init Next.js 15 + Tailwind + shadcn/ui in repo root — Done when: `npm run dev` starts clean at localhost:3000 *(used Next.js **16** — `latest` has advanced; dev verified HTTP 200)*
-- [x] Create Supabase project, apply schema above via migration — Done when: all 5 tables exist, RLS enabled on attendees/connections *(project `nxhitfftluvjwoyvzkos` live; migration applied — verified all 5 tables reachable and RLS returns 0 rows to anon)*
-- [x] Add Supabase server + browser clients, commit `.env.example` — Done when: a server action can read/write `events` *(clients in `src/lib/supabase/`, `createEvent`/`getEventBySlug` in `src/lib/events.ts`, `.env.example` committed)*
-- [x] Folder structure: `app/`, `lib/ai/`, `lib/supabase/`, `lib/ingest/`, `components/` — Done when: dirs exist with index stubs *(under `src/` per shadcn import alias)*
+- [ ] Read `node_modules/next/dist/docs/` (routing, route handlers, proxy) and current Supabase Auth SSR docs before coding — Done when: noted in PROJECT.md which APIs differ from defaults
+- [ ] User task: create LinkedIn developer app + enable LinkedIn (OIDC) provider in Supabase (instructions above) — Done when: provider shows "enabled" in dashboard
+- [ ] Add `src/lib/supabase/` browser + server cookie clients per @supabase/ssr docs — Done when: `npm run test` and `npm run build` pass
+- [ ] `/login` page with "Continue with LinkedIn" (`signInWithOAuth({ provider: 'linkedin_oidc' })`) + magic-link fallback, and `/auth/callback` route handler — Done when: full round-trip sign-in works locally
+- [ ] Migration `0003_identity.sql` (profiles + trigger to create profile row on signup, attendees.user_id) with RLS policies — Done when: user pastes SQL; signing in creates a profiles row
+- [ ] Header auth widget (avatar, sign out) on landing + afterparty pages — Done when: visible signed-in/out states
+
+### Milestone 2: Claim your afterparty page
+**Goal:** A token link (`/p/[token]`) can be claimed by a signed-in user, linking the attendee row to their account and enriching it from LinkedIn.
+
+Tasks:
+- [ ] "Claim this page with LinkedIn" CTA on `/p/[token]` when unclaimed; claiming sets `attendees.user_id` (token possession = proof) — Done when: claimed page shows owner avatar; second account cannot claim it
+- [ ] On claim, pull name/photo into the profile and let the user add their LinkedIn URL — Done when: LinkedIn URL renders on their attendee card for others
+- [ ] Auto-match on sign-in: if `claim_email` matches the auth email, offer one-click claim of those pages — Done when: seeded test attendee with matching email gets the prompt
+- [ ] Token links keep working unauthenticated (the no-app wedge) — Done when: signed-out visit to `/p/[token]` is unchanged
+
+### Milestone 3: My events dashboard
+**Goal:** One place per user listing every afterparty they've claimed — the multi-event retention loop.
+
+Tasks:
+- [ ] `/me` route (auth-protected via session check, not proxy) listing claimed pages: event name, date, countdown, follow-up progress — Done when: a user with 2 claimed events sees both
+- [ ] Cross-event "people" view: all confirmed + marked connections across events with copy/export (reuse vCard code) — Done when: connections from 2 events appear in one list
+- [ ] Post-sign-in redirect lands on `/me`; empty state explains how pages get claimed — Done when: new user sees useful empty state
+
+### Milestone 4: Mutual "we met" confirmation
+**Goal:** Honest confirmed edges: one side claims, the other confirms; both see a solid edge.
+
+Tasks:
+- [ ] "We met at the event" button on attendee cards (requires claimed page) → sets/creates edge `marked` + `met_claimed_by` — Done when: claimer sees "waiting for them to confirm"
+- [ ] Counterpart sees pending confirmations on their page + `/me`; one tap upgrades both directions to `confirmed` — Done when: both graphs show the solid edge
+- [ ] Graph styling: `confirmed` solid/bright, `marked` dashed, `recommended` dotted; legend updated — Done when: visually distinct in `/p/[token]` graph
+- [ ] Organizer dashboard: confirmed-meetings count + rate (the ROI metric) — Done when: stat reflects test confirmations
+
+### Milestone 5: QR auto-confirm (the "automatic" path)
+**Goal:** Two people who physically scan each other skip manual confirmation entirely — scan = mutual presence = instant `confirmed`.
+
+Tasks:
+- [ ] Generate per-attendee `meet_code` + QR on their afterparty page (shareable/printable card) — Done when: QR encodes `/meet/[code]`
+- [ ] `/meet/[code]`: signed-in visitor with a claimed page in the same event → instant `confirmed` edge both ways + toast; signed-out visitor → sign-in/claim flow first, then auto-completes — Done when: phone-scan demo works end-to-end
+- [ ] Abuse guards: same-event check, self-scan no-op, idempotent repeat scans, simple rate limit — Done when: each case has a test
+- [ ] Honesty copy: confirmed edges labeled "you both confirmed you met" — Done when: tooltip/detail panel says it
+
+### Milestone 6: Production hardening + relaunch
+**Goal:** Safe public deploy with auth live.
+
+Tasks:
+- [ ] Resolve the real-data gate: delete `dwny-2026` from the prod DB and seed a synthetic demo event (or move real data behind a separate password-gated env) — Done when: public site contains no non-consented personal data
+- [ ] Decide `SITE_PASSWORD` scope: drop the global gate once real data is out; keep `robots noindex` only on demo pages — Done when: `/` and `/login` are publicly reachable
+- [ ] RLS audit: verify anon/authenticated roles can only do what Milestones 1–5 intend (attempt cross-user reads/writes in a test script) — Done when: audit script passes
+- [ ] Optional: confirm-nudge email via Resend free tier — Done when: claiming "we met" emails the counterpart (skip if deferring)
+- [ ] Update README/SUBMISSION → README reflects Phase 2; redeploy to Vercel (user runs deploy + sets env) — Done when: live site sign-in works
 
 ---
 
-### Milestone 2: Ingestion — attendee list → structured attendees *(Day 2)*
-**Goal:** Upload a CSV/JSON attendee list and get normalized attendee rows.
+## Environment Variables (delta)
 
-Tasks:
-- [x] CSV/JSON upload endpoint + parser (PapaParse) that maps arbitrary columns → {name,title,company,bio,interests,socials} — Done when: uploading a messy real-world CSV produces clean attendee rows *(parser in `src/lib/ingest/parse.ts` with synonym-based header mapping, first/last-name merge, BOM strip, social-handle→URL, email dedupe; 6 unit tests pass; server action `ingestAttendeeList` + `/upload` UI; verified end-to-end against live DB)*
-- [~] Claude normalization pass: infer `interests[]` from title/company/bio when missing — Done when: attendees with no explicit interests get sensible tags *(implemented in `src/lib/ingest/normalize.ts`, wired into ingest; **gracefully no-ops until `ANTHROPIC_API_KEY` is set** — output not yet verified with a live key)*
-- [x] Generate unique `page_token` per attendee on ingest — Done when: every attendee row has a tokenized URL *(`src/lib/tokens.ts`, 96-bit base64url; verified all-unique on 8-row insert)*
-- [x] UI shows other upload types (Discord, photos, recordings) as **disabled "coming soon"** — Done when: visible in UI but only the list path is wired *(4 disabled source tiles on `/upload`; no faked parsing)*
+```
+# Existing (unchanged): NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_APP_URL, SITE_PASSWORD (to be retired in M6)
 
----
+# LinkedIn OIDC credentials live in the Supabase dashboard, NOT in this app's env.
 
-### Milestone 3: AI Core — clustering + matchmaking *(Days 3–4) ⭐ THE PRODUCT*
-**Goal:** For an event's attendees, generate interest clusters and per-attendee "5 people you should meet + why."
-
-> **Design change (2026-06-01):** built **key-free and deterministic** instead of Claude-first (user is skipping the Anthropic key for now). Clustering + matchmaking run as pure functions — free, fast, reproducible (great for a zero-API-call live demo), and fully honest. Claude becomes an **optional enhancement** for richer reason prose once a key is added.
-
-Tasks:
-- [x] Clustering: ~~Claude~~ **deterministic** grouping into ≤8 labeled interest clusters — Done when: clusters cover ~all attendees with human-readable themes, persisted to `clusters` *(`src/lib/ai/cluster.ts`; verified on sample → "AI" + "General Networking", every attendee covered once)*
-- [x] Matchmaking: for each attendee, top 5 recommended connections with a specific one-line `reason` each — Done when: rows written to `connections` as `kind='recommended'`, reasons reference real attributes *(`src/lib/ai/match.ts`; scores by shared interest tags / cluster / company; reasons cite shared tags + title/company)*
-- [~] ~~Claude **Batch** + caching~~ — **N/A for the keyless path** (cost is $0). Deferred: optional Claude pass to enrich reasons + catch semantic interest matches (e.g. "Devtools" ≈ "Developer Experience") once `ANTHROPIC_API_KEY` is set.
-- [x] Guardrail: never assert two people met; only recommend — Done when: spot-check shows zero false "you talked to" claims *(enforced by construction; unit test asserts no reason matches met/talked/spoke/connected)*
-- [x] Idempotent re-run (clear + regenerate per event) — Done when: re-running doesn't duplicate connections *(`generateForEvent` deletes prior clusters + `recommended` connections — preserving user `marked`/`confirmed` edges — before regenerating; verified reset → 0)*
-
----
-
-### Milestone 4: The Afterparty Page *(Days 5–6) ⭐ THE HERO*
-**Goal:** A gorgeous, tokenized, public personal page — the thing judges see themselves on.
-
-> **Aesthetic:** vibrant & celebratory (user pick) — fuchsia/indigo/amber gradient washes, glowing graph nodes, glassmorphic cards on a near-black base so the neon reads.
-
-Tasks:
-- [x] Route `app/p/[token]/page.tsx` server-renders one attendee's afterparty — Done when: valid token shows that person; invalid/expired shows graceful state *(loader `src/lib/page-data.ts` returns `live`/`dissolved`/`not_found`; all three states render; verified HTTP 200 on real token + on bad token)*
-- [x] Hero section: "Here was your room" — event name, attendee count, clusters — Done when: renders real data, looks designed *(gradient hero, name greeting, attendee count, cluster chips; verified "here was your room" + clusters in output)*
-- [x] **5 people you should meet** cards with name/title/company + `reason` + "reach out" link — Done when: cards render real recommendations *(in `AfterpartyBoard`; reach-out picks LinkedIn>X>email>site; verified real reasons render)*
-- [x] **Editable connection graph** (react-force-graph): nodes = you + recommendations + marked; add/remove/confirm edges; persists — Done when: edits survive reload *(`RelationshipGraph` + token-auth `setConnection` action; tap to confirm, search-to-add marked; verified confirmed+marked persist across reload)*
-- [x] **30-day countdown** to `dissolves_at`, framed as privacy-by-design — Done when: live ticking timer, copy frames ephemerality as a feature *(`Countdown` component, "your data isn't kept a day longer than the memory")*
-- [x] Mobile-responsive + share/open-graph image — Done when: looks great on a phone and link previews show the attendee's name *(responsive grids/stack; dynamic `opengraph-image.tsx` via next/og → "{name}'s afterparty", verified 200 image/png)*
-
----
-
-### Milestone 5: Organizer Dashboard — ONE screen *(Day 7)*
-**Goal:** The B2B ROI story in a single, screenshot-able view. Resist building a suite.
-
-Tasks:
-- [x] ~~Organizer magic-link auth~~ → **unguessable-link access** gating `/dashboard/[id]` — Done when: only someone with the link can view *(user-approved change: dashboard keyed by the event **UUID** — 122-bit, unguessable, never exposed to attendees. Zero login friction / email setup; real per-account SSO is the enterprise-roadmap line. Bad id → graceful "not found".)*
-- [x] Cluster overview: full-event force graph colored by cluster + sizes — Done when: renders the whole room, visually legible *(`RoomGraph` + `cluster-colors` palette; nodes colored by cluster, legend with sizes; verified render)*
-- [x] ROI stats: connection density, # clusters, top theme — Done when: numbers compute from real data *(`dashboard-data.ts`: density = % of all possible pairs mapped, connections mapped, **follow-ups started** (confirmed edges = real engagement), clusters count, top theme; all from live data)*
-- [x] Upload + "generate" flow → attendee links works in the UI — Done when: end-to-end from upload to attendee links works *(`/upload` ingests→generates→shows sample attendee pages **and** an "Open organizer dashboard" link)*
-
----
-
-### Milestone 6: DeveloperWeek Demo Data *(Day 8) ⭐ THE PITCH*
-**Goal:** A real, pre-generated DeveloperWeek afterparty so the live demo makes zero API calls and never fails on stage.
-
-Tasks:
-- [x] Assemble a real DeveloperWeek 2026 attendee list into CSV — Done when: a real-names CSV exists *(scraped **448 of 455** real participants from the Devpost participants tab via the logged-in session, since Devpost has no participant export; name + specialty + curated interest tags. Lives in gitignored `demo-data/devpost-ny-2026.csv` — **real non-consented data, never committed, local-demo-only**.)*
-- [x] Pre-run ingestion + generation, store as a seeded demo event — Done when: a fixed demo URL loads instantly with no live Claude call *(event slug `dwny-2026`, 448 attendees, 7 balanced interest clusters + General, 2240 connections; deterministic = zero API calls. Stable event id + page tokens across re-seeds.)*
-- [~] Hand-curate "judge" attendee pages — *deferred: the dataset is participants, not judges. The "see yourself" moment uses the organizer's own page (Ishani's) + any real attendee. Curation optional.*
-- [x] Seed script committed so the demo is reproducible — Done when: `npm run seed:demo` rebuilds the demo event *(`scripts/seed-demo.mjs`, idempotent, token/id-preserving)*
-
-> **⚠️ Deploy gate (for M7):** the live DB now contains the real scraped participant event. Do **not** deploy a public site against it. Before M7, either point prod at a separate Supabase with a **synthetic** dataset, or remove the `dwny-2026` event from the deployed DB. Keep the scraped data local-only.
-
----
-
-### Milestone 7: Deploy *(Day 9 AM)*
-**Goal:** Live at the real domain.
-
-> **Decision:** deploying **with the real dataset**, so the whole site is **password-gated** (user choice) — never publicly accessible/indexable. Gate built; deploy + DNS need the user's Vercel account.
-
-Tasks:
-- [x] **Password gate for the real-data deploy** — `src/proxy.ts` (Next 16 renamed `middleware`→`proxy`): HTTP Basic Auth on every route, active only when `SITE_PASSWORD` is set (local dev stays open). `robots:{index:false}` added. Verified 401 without / 200 with password. Deploy guide in `DEPLOY.md`.
-- [ ] Deploy to Vercel, set env vars incl. `SITE_PASSWORD` — Done when: production URL prompts for password then serves the demo *(needs user's Vercel account — steps in `DEPLOY.md`)*
-- [ ] Point `afterparty.digital` DNS to Vercel — Done when: https://afterparty.digital loads (behind the gate)
-- [ ] Landing page — ✅ already built at `/` in the interactivity pass; pricing section still TODO (Free / Pro $299 / Enterprise)
-
----
-
-### Milestone 8: Polish + Pitch *(Day 9 PM)*
-**Goal:** No rough edges on the demo path; pitch rehearsed.
-
-Tasks:
-- [ ] Loading/empty/expired states on every page — Done when: no raw errors anywhere on the happy path
-- [ ] Consent/privacy microcopy: organizer-gated, opt-out, 30-day dissolve as data-minimization — Done when: a judge asking "did people consent?" has a visible on-page answer
-- [ ] Rehearse the demo script: "This hackathon ends tonight — here's what afterparty.digital already built for it" → live judge page — Done when: run end-to-end 3× under 3 minutes
-- [ ] Record a 60s fallback video in case live demo network fails — Done when: video exists and is linked in README
-
----
-
-## Stretch (only if ahead — do NOT start before Milestone 6 is done)
-- Reconnect inbox: "people you haven't reached out to yet" nudge list.
-- Richer ingestion: a real Discord export parser to upgrade edges from `recommended` → actual co-presence (this is the future-vision slide made real).
-- Sponsor/session ROI breakdown on the dashboard.
+# Optional (Milestone 6)
+RESEND_API_KEY=        # resend.com — confirm-nudge emails
+```
 
 ---
 
 ## Claude Code Commands
 
-**Start fresh (Milestone 1):**
+> In every session: fetch latest official docs before coding against any library (Next 16 docs are in `node_modules/next/dist/docs/`), and keep `PROJECT.md` in sync.
+
+**Start Phase 2:**
 ```
-claude "Read PLAN.md and complete Milestone 1. Mark tasks done as you go. Stop after Milestone 1 and commit."
+claude "Read PLAN.md and PROJECT.md. Complete Milestone 1, fetching the latest official docs for any library before using it. Update PROJECT.md to reflect what you built. Mark tasks done as you go. Stop after Milestone 1 and commit."
 ```
 
-**Resume from any point:**
+**Resume:**
 ```
-claude "Read PLAN.md, find the first incomplete task, and continue. Mark tasks done as you go. Commit when a milestone is complete."
+claude "Read PLAN.md and PROJECT.md. Find the first incomplete task and continue, fetching the latest official docs for any library before using it. Keep PROJECT.md in sync. Mark tasks done as you go. Commit when a milestone is complete."
 ```
 
-**Test the current state:**
+**Test current state:**
 ```
-claude "Read PLAN.md. Without building anything new, test everything that's marked done. Report what works and what's broken."
+claude "Read PLAN.md and PROJECT.md. Without building anything new, test everything that's marked done. Report what works and what's broken."
 ```
 
 ---
 
 ## Notes & Decisions
 
-- **2026-06-01** — Confirmed demo data is **attendee-list-only** (no Discord/interaction data). Pivoted core feature from "relationship detection" to **honest matchmaking + editable intent graph**, framed strictly as post-event "afterparty" second-chance. The during/before-event platform idea is deferred to a roadmap slide, not built — it reintroduces cold-start and surrenders the post-event positioning.
-- **Wedge** — AI matchmaking is commoditized (Brella/Grip/Swapcard); the *afterparty / post-event* frame is the only defensible differentiator.
-- **Hero priority order**: Afterparty page (M4) > AI core (M3) > Demo data (M6) > Organizer dashboard (M5). If time runs out, the dashboard shrinks to a single static-looking screen.
-- **Cost control** — demo pages pre-generated; live pitch makes zero Claude calls.
-- **2026-06-01 (Milestone 5 done)** — Organizer dashboard at `/dashboard/[id]` (the event UUID = unguessable link; no auth/email setup — user-approved over magic-link). ROI screen: stat cards (connection density %, connections mapped, follow-ups started, room size), full-room `RoomGraph` colored by cluster with sized legend, top theme. Loader `src/lib/dashboard-data.ts`; shared palette `src/lib/cluster-colors.ts` (extracted so the server page + client graph share it — RSC boundary fix). `/upload` now surfaces the dashboard link. Verified 200 + all sections on the seeded event; bad id → graceful not-found.
-- **2026-06-01 (Milestone 4 done) ⭐ HERO** — Tokenized afterparty page at `/p/[token]` (vibrant/celebratory): gradient hero, cluster chips, live 30-day `Countdown`, interactive `AfterpartyBoard` (glowing react-force-graph + "5 people to meet" cards + search-to-add). Editing via token-auth `setConnection` action (`src/lib/connections.ts`); confirm/mark persist across reload (verified). Dynamic OG image. Graceful `not_found`/`dissolved` states. Loader: `src/lib/page-data.ts`. **A seeded demo event "DeveloperWeek 2026 (demo)" (slug `smoke-demo`, 8 attendees) is live in the DB** — Ada's page (`/p/7aWZSezXnbYSZh2-`) shows a confirmed + marked example. Re-seed logic should move into a committed script in Milestone 6.
-- **2026-06-01 (Milestone 3 done, key-free)** — AI core built as **deterministic** clustering (`src/lib/ai/cluster.ts`) + matchmaking (`src/lib/ai/match.ts`), orchestrated by `generateForEvent` (`src/lib/generate.ts`), auto-run after ingest from `/upload`. No Anthropic key required → live demo makes **zero API calls**. 11 unit tests pass (incl. honesty-rule + determinism). Verified end-to-end on live DB. **Claude is now an optional enhancement** (richer reasons + semantic interest matching) gated on `ANTHROPIC_API_KEY`; the deterministic path is the default and always works.
-- **2026-06-01 (Milestone 2 done)** — Ingestion pipeline complete: robust CSV/JSON parser (`src/lib/ingest/`), unique page tokens (`src/lib/tokens.ts`), `ingestAttendeeList` server action (`src/lib/attendees.ts`), `/upload` UI with disabled "coming soon" source tiles. `npm run test` runs node:test parser suite (6 passing) via Node 24 type-stripping; added `allowImportingTsExtensions` to tsconfig for the explicit `.ts` test imports. Sample data at `samples/attendees-sample.csv`. **Only the Claude interest-inference step is unverified — needs `ANTHROPIC_API_KEY`** (no-ops gracefully until then).
-- **2026-06-01 (Milestone 1 done)** — Scaffolded with **Next.js 16.2.7** (the `latest` tag moved past 15), React 19, Tailwind v4, shadcn/ui (`base-nova` style). src-dir layout, so plan's `lib/*` live under `src/lib/*`. Stack additions installed: `@supabase/supabase-js`, `@supabase/ssr`, `@anthropic-ai/sdk`, `react-force-graph-2d`. **One manual step remains before Milestone 2:** create a Supabase project and apply `supabase/migrations/0001_init.sql`, then fill `.env.local`.
+- **2026-06-11** — LinkedIn connection-graph import rejected (partner-only API, no timestamps, scraping = ToS violation). Automatic confirmation = QR scan exchange instead.
+- **2026-06-11** — Token links remain the unauthenticated entry point; LinkedIn sign-in *upgrades* a page (claim), it doesn't gate it. Preserves the "no app, no login" first-touch wedge.
+- **2026-06-11** — Kept flat `src/` layout (no `apps/web` restructure): working deployed app, restructure is churn with no second surface planned.
+- **2026-06-11** — DB migrations are applied by the user pasting SQL into the Supabase SQL editor (no DDL via service key) — every migration task includes that handoff.
