@@ -91,6 +91,7 @@ repo-root/
 | 4. Mutual "we met" confirmation | ☐ todo | |
 | 5. QR auto-confirm | ☐ todo | |
 | 6. Production hardening + relaunch | ☐ todo | ⚠️ must purge real `dwny-2026` data before public signup |
+| 7. Organizer accounts & ROI | ☐ todo | Claim dashboards, `/organizer` home, engagement funnel, printable ROI report, open-reminder nudges |
 
 Phase 1 (hackathon): **all 8 milestones complete and deployed** to Vercel (password-gated). Archive: `docs/01-hackathon-plan.md`.
 

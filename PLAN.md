@@ -53,6 +53,12 @@ connections.kind already supports 'recommended' | 'marked' | 'confirmed'
 connections + met_claimed_by uuid NULL    -- who first said "we met"
 connections + confirmed_at timestamptz NULL
 attendees + meet_code text UNIQUE         -- short random code embedded in the personal QR
+
+-- 0005: organizer accounts + engagement tracking
+events + organizer_id uuid NULL references profiles(id)  -- set when an organizer claims the event
+                                          -- (claim proof = possession of the unguessable dashboard UUID, same pattern as attendee tokens)
+attendees + first_opened_at timestamptz NULL              -- set server-side on first token-page render
+attendees + last_opened_at timestamptz NULL
 ```
 
 RLS posture: all reads currently flow through server code using the service key; new policies must let an **authenticated user** read/update only their own `profiles` row and claimed `attendees` rows, and insert/upgrade `connections` only where they are source or target. Migrations are pasted into the Supabase SQL editor by the user (no DDL via service key).
@@ -117,6 +123,16 @@ Tasks:
 - [ ] Optional: confirm-nudge email via Resend free tier — Done when: claiming "we met" emails the counterpart (skip if deferring)
 - [ ] Update README/SUBMISSION → README reflects Phase 2; redeploy to Vercel (user runs deploy + sets env) — Done when: live site sign-in works
 
+### Milestone 7: Organizer accounts & ROI
+**Goal:** Organizers sign in like everyone else, manage all their events in one place, and get shareable proof that the event produced connections — the thing that justifies the Pro tier.
+
+Tasks:
+- [ ] Organizer claim flow: visiting `/dashboard/[id]` while signed in offers "Claim this event" (UUID possession = proof, same pattern as attendee pages) → sets `events.organizer_id`; claimed dashboards require the owner's session, unclaimed UUIDs keep working — Done when: second account can't claim or view a claimed event's dashboard
+- [ ] Organizer home `/organizer`: all claimed events with headline stats (attendees, claimed pages, confirmed meetings, days left) + "New event" entry into `/upload`; `/upload` now attaches the event to the signed-in organizer — Done when: an organizer with 2 events sees both and can create a third
+- [ ] Engagement funnel on the dashboard: invited → opened (`first_opened_at`) → claimed → marked → confirmed, as a funnel viz + trend over the 30-day window — Done when: seeded test activity renders a believable funnel
+- [ ] Shareable ROI one-pager: print-friendly `/dashboard/[id]/report` (event summary, funnel, confirmed-meeting count/rate, top clusters) for bosses/sponsors — Done when: browser print-to-PDF produces a clean single page; **aggregate numbers only, no attendee PII**
+- [ ] Re-engagement nudge (needs Resend from M6): one-click "remind attendees who haven't opened their page," rate-limited to 1 send per attendee per event — Done when: test attendee without `first_opened_at` receives the email; repeat click is a no-op
+
 ---
 
 ## Environment Variables (delta)
@@ -160,3 +176,4 @@ claude "Read PLAN.md and PROJECT.md. Without building anything new, test everyth
 - **2026-06-11** — Token links remain the unauthenticated entry point; LinkedIn sign-in *upgrades* a page (claim), it doesn't gate it. Preserves the "no app, no login" first-touch wedge.
 - **2026-06-11** — Kept flat `src/` layout (no `apps/web` restructure): working deployed app, restructure is churn with no second surface planned.
 - **2026-06-11** — DB migrations are applied by the user pasting SQL into the Supabase SQL editor (no DDL via service key) — every migration task includes that handoff.
+- **2026-06-11** — Organizer scope (M7): accounts + multi-event home + engagement funnel + printable ROI report + open-reminder nudges. Deliberately **out** of scope: white-label branding and CRM export (Enterprise pitch material, not build targets); attendee-level engagement detail for organizers (report shows aggregates only — attendees' notes/marks stay private to them).
